@@ -5,6 +5,7 @@ module Test.ThreadNet.Shelley (tests) where
 
 import           Control.Monad (replicateM)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromMaybe)
 import           Data.Word (Word64)
 
 import           Test.QuickCheck
@@ -32,8 +33,8 @@ import           Test.Util.Nightly
 import           Test.Util.Orphans.Arbitrary ()
 import           Test.Util.Slots (NumSlots (..))
 
-import qualified Cardano.Ledger.BaseTypes as SL (UnitInterval,
-                     mkNonceFromNumber, unitIntervalToRational)
+import qualified Cardano.Ledger.BaseTypes as SL (BoundedRational (..),
+                     UnitInterval, mkNonceFromNumber, PositiveUnitInterval)
 import qualified Shelley.Spec.Ledger.API as SL
 
 import           Ouroboros.Consensus.Shelley.Eras (EraCrypto)
@@ -74,8 +75,9 @@ minK = 5   -- Less than this increases risk of CP violations
 maxK :: Word64
 maxK = 10   -- More than this wastes execution time
 
-activeSlotCoeff :: Rational
-activeSlotCoeff = 0.5   -- TODO this is high
+activeSlotCoeff :: SL.PositiveUnitInterval
+activeSlotCoeff = fromMaybe (error "betrayed by the number one half") $
+                    SL.boundRational 0.5  -- TODO this is high
 
 instance Arbitrary TestSetup where
   arbitrary = do
@@ -349,7 +351,7 @@ prop_simple_real_tpraos_convergence TestSetup
             ) $
           counterexample msg $
           dWasFreeToVary .||.
-            SL.unitIntervalToRational actual ===
+            SL.unboundRational actual ===
               decentralizationParamToRational expected
         | (nid, lsUnticked) <- finalLedgers
         ]

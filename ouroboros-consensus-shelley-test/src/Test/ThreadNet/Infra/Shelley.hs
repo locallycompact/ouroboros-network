@@ -40,6 +40,7 @@ import qualified Data.ByteString as BS
 import           Data.Coerce (coerce)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromMaybe)
 import           Data.Ratio (denominator, numerator)
 import qualified Data.Sequence.Strict as Seq
 import           Data.Set (Set)
@@ -69,8 +70,8 @@ import           Test.Util.Orphans.Arbitrary ()
 import           Test.Util.Slots (NumSlots (..))
 import           Test.Util.Time (dawnOfTime)
 
-import qualified Cardano.Ledger.BaseTypes as SL (truncateUnitInterval,
-                     unitIntervalFromRational)
+import qualified Cardano.Ledger.BaseTypes as SL (BoundedRational (..),
+                     PositiveUnitInterval, maybeToStrictMaybe)
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Crypto (Crypto, DSIGN, HASH, KES, VRF)
 import qualified Cardano.Ledger.Era as Core
@@ -257,13 +258,14 @@ mkKesConfig _ (NumSlots t) = KesConfig
 -- | The epoch size, given @k@ and @f@.
 --
 -- INVARIANT: @10 * k / f@ must be a whole number.
-mkEpochSize :: SecurityParam -> Rational -> EpochSize
+mkEpochSize :: SecurityParam -> SL.PositiveUnitInterval -> EpochSize
 mkEpochSize (SecurityParam k) f =
     if r /= 0 then error "10 * k / f must be a whole number" else
     EpochSize q
   where
-    n = numerator   f
-    d = denominator f
+    f' = SL.unboundRational f
+    n = numerator   f'
+    d = denominator f'
 
     (q, r) = quotRem (10 * k * fromInteger d) (fromInteger n)
 
@@ -274,7 +276,7 @@ mkGenesisConfig
   :: forall era. PraosCrypto (EraCrypto era)
   => ProtVer   -- ^ Initial protocol version
   -> SecurityParam
-  -> Rational  -- ^ Initial active slot coefficient
+  -> SL.PositiveUnitInterval  -- ^ Initial active slot coefficient
   -> DecentralizationParam
   -> Word64
      -- ^ Max Lovelace supply, must be >= #coreNodes * initialLovelacePerCoreNode
@@ -324,7 +326,7 @@ mkGenesisConfig pVer k f d maxLovelaceSupply slotLength kesCfg coreNodes =
     pparams :: SL.PParams era
     pparams = SL.emptyPParams
       { SL._d               =
-          SL.unitIntervalFromRational $ decentralizationParamToRational d
+          fromMaybe (error "d exceeds bounds") $ SL.boundRational $ decentralizationParamToRational d
       , SL._maxBBSize       = 10000 -- TODO
       , SL._maxBHSize       = 1000 -- TODO
       , SL._protocolVersion = pVer
@@ -384,7 +386,7 @@ mkGenesisConfig pVer k f d maxLovelaceSupply slotLength kesCfg coreNodes =
                   -- Each core node pledges its full stake to the pool.
                 , SL._poolPledge = SL.Coin $ fromIntegral initialLovelacePerCoreNode
                 , SL._poolCost = SL.Coin 1
-                , SL._poolMargin = SL.truncateUnitInterval 0
+                , SL._poolMargin = minBound
                   -- Reward accounts live in a separate "namespace" to other
                   -- accounts, so it should be fine to use the same address.
                 , SL._poolRAcnt = SL.RewardAcnt networkId $ mkCredential cnDelegateKey
@@ -501,8 +503,8 @@ mkSetDecentralizationParamTxs coreNodes pVer ttl dNew =
         [ ( SL.hashKey $ SL.VKey $ deriveVerKeyDSIGN $ cnGenesisKey cn
           , SL.emptyPParamsUpdate
               { SL._d =
-                  SL.SJust $
-                  SL.unitIntervalFromRational $
+                  SL.maybeToStrictMaybe $
+                  SL.boundRational $
                   decentralizationParamToRational dNew
               , SL._protocolVersion =
                   SL.SJust pVer
@@ -641,8 +643,8 @@ mkMASetDecentralizationParamTxs coreNodes pVer ttl dNew =
         [ ( SL.hashKey $ SL.VKey $ deriveVerKeyDSIGN $ cnGenesisKey cn
           , SL.emptyPParamsUpdate
               { SL._d =
-                  SL.SJust $
-                  SL.unitIntervalFromRational $
+                  SL.maybeToStrictMaybe $
+                  SL.boundRational $
                   decentralizationParamToRational dNew
               , SL._protocolVersion =
                   SL.SJust pVer
