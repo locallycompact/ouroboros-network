@@ -357,7 +357,7 @@ runWith RunNodeArgs{..} LowLevelRunNodeArgs{..} =
       -> NodeKernel     m (ConnectionId addrNTN) (ConnectionId addrNTC) blk
       -> BlockNodeToClientVersion blk
       -> NodeToClientVersion
-      -> NTC.Apps m (ConnectionId addrNTC) ByteString ByteString ByteString ()
+      -> NTC.Apps m (ConnectionId addrNTC) ByteString ByteString ByteString ByteString ()
     mkNodeToClientApps nodeKernelArgs nodeKernel blockVersion networkVersion =
         NTC.mkApps
           nodeKernel
@@ -372,7 +372,7 @@ runWith RunNodeArgs{..} LowLevelRunNodeArgs{..} =
          )
       -> (   BlockNodeToClientVersion blk
           -> NodeToClientVersion
-          -> NTC.Apps m (ConnectionId addrNTC) ByteString ByteString ByteString ()
+          -> NTC.Apps m (ConnectionId addrNTC) ByteString ByteString ByteString ByteString ()
          )
       -> NodeKernel m (ConnectionId addrNTN) (ConnectionId addrNTC) blk
       -> DiffusionApplications
