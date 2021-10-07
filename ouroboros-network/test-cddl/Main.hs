@@ -43,7 +43,7 @@ import           System.Process.ByteString.Lazy
 
 import           Network.TypedProtocol.Core
 
-import           Ouroboros.Network.Block (Point, Tip, encodeTip,
+import           Ouroboros.Network.Block (Point, SlotNo, Tip, encodeTip,
                    decodeTip, wrapCBORinCBOR, unwrapCBORinCBOR)
 import           Ouroboros.Network.CodecCBORTerm
 import           Ouroboros.Network.Magic
@@ -81,6 +81,10 @@ import           Ouroboros.Network.Protocol.TxSubmission2.Type (TxSubmission2)
 import qualified Ouroboros.Network.Protocol.TxSubmission2.Type as TxSubmission2
 import           Ouroboros.Network.Protocol.TxSubmission2.Codec (codecTxSubmission2)
 import           Ouroboros.Network.Protocol.TxSubmission2.Test ()
+import           Ouroboros.Network.Protocol.LocalTxMonitor.Type (LocalTxMonitor)
+import qualified Ouroboros.Network.Protocol.LocalTxMonitor.Type as LocalTxMonitor
+import           Ouroboros.Network.Protocol.LocalTxMonitor.Codec (codecLocalTxMonitor)
+import qualified Ouroboros.Network.Protocol.LocalTxMonitor.Test as LocalTxMonitor
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Type as LocalTxSubmission
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
@@ -114,6 +118,7 @@ tests CDDLSpecs { cddlChainSync
                 , cddlBlockFetch
                 , cddlTxSubmission
                 , cddlLocalTxSubmission
+                , cddlLocalTxMonitor
                 , cddlTxSubmission2
                 , cddlKeepAlive
                 , cddlLocalStateQuery
@@ -142,6 +147,8 @@ tests CDDLSpecs { cddlChainSync
                                                cddlKeepAlive)
       , testProperty "LocalTxSubmission" (prop_encodeLocalTxSubmission
                                                cddlLocalTxSubmission)
+      , testProperty "LocalTxMonitor" (prop_encodeLocalTxMonitor
+                                               cddlLocalTxMonitor)
       , testProperty "LocalStateQuery"   (prop_encodeLocalStateQuery
                                                cddlLocalStateQuery)
       ]
@@ -165,6 +172,8 @@ tests CDDLSpecs { cddlChainSync
                                            cddlKeepAlive)
       , testCase "LocalTxSubmission" (unit_decodeLocalTxSubmission
                                            cddlLocalTxSubmission)
+      , testCase "LocalTxMonitor" (unit_decodeLocalTxMonitor
+                                           cddlLocalTxMonitor)
       , testCase "LocalStateQuery"   (unit_decodeLocalStateQuery
                                            cddlLocalStateQuery)
       ]
@@ -189,6 +198,7 @@ data CDDLSpecs = CDDLSpecs {
     cddlLocalTxSubmission     :: CDDLSpec (LocalTxSubmission
                                              LocalTxSubmission.Tx
                                              LocalTxSubmission.Reject),
+    cddlLocalTxMonitor        :: CDDLSpec (LocalTxMonitor TxId Tx SlotNo),
     cddlLocalStateQuery       :: CDDLSpec (LocalStateQuery
                                              Block (Point Block)
                                              LocalStateQuery.Query)
@@ -209,6 +219,7 @@ readCDDLSpecs = do
     txSubmission2         <- BL.readFile (dir </> "tx-submission2.cddl")
     keepAlive             <- BL.readFile (dir </> "keep-alive.cddl")
     localTxSubmission     <- BL.readFile (dir </> "local-tx-submission.cddl")
+    localTxMonitor        <- BL.readFile (dir </> "local-tx-monitor.cddl")
     localStateQuery       <- BL.readFile (dir </> "local-state-query.cddl")
     -- append common definitions; they must be appended since the first
     -- definition is the entry point for a cddl spec.
@@ -226,6 +237,8 @@ readCDDLSpecs = do
                                             <> common,
         cddlKeepAlive             = CDDLSpec keepAlive,
         cddlLocalTxSubmission     = CDDLSpec $ localTxSubmission
+                                            <> common,
+        cddlLocalTxMonitor        = CDDLSpec $ localTxMonitor
                                             <> common,
         cddlLocalStateQuery       = CDDLSpec $ localStateQuery
                                             <> common
@@ -285,6 +298,15 @@ localTxSubmissionCodec =
       Serialise.decode
       Serialise.encode
       Serialise.decode
+
+
+localTxMonitorCodec :: Codec (LocalTxMonitor TxId Tx SlotNo)
+                                CBOR.DeserialiseFailure IO BL.ByteString
+localTxMonitorCodec =
+    codecLocalTxMonitor
+      Serialise.encode Serialise.decode
+      Serialise.encode Serialise.decode
+      Serialise.encode Serialise.decode
 
 
 localStateQueryCodec :: Codec (LocalStateQuery Block (Point Block) LocalStateQuery.Query)
@@ -489,6 +511,11 @@ prop_encodeLocalTxSubmission
     -> Property
 prop_encodeLocalTxSubmission spec = validateEncoder spec localTxSubmissionCodec
 
+prop_encodeLocalTxMonitor
+    :: CDDLSpec            (LocalTxMonitor TxId Tx SlotNo)
+    -> AnyMessageAndAgency (LocalTxMonitor TxId Tx SlotNo)
+    -> Property
+prop_encodeLocalTxMonitor spec = validateEncoder spec localTxMonitorCodec
 
 prop_encodeLocalStateQuery
     :: CDDLSpec            (LocalStateQuery Block (Point Block) LocalStateQuery.Query)
@@ -690,12 +717,28 @@ unit_decodeKeepAlive spec =
 
 unit_decodeLocalTxSubmission
   :: CDDLSpec (LocalTxSubmission LocalTxSubmission.Tx LocalTxSubmission.Reject)
-    -> Assertion
+  -> Assertion
 unit_decodeLocalTxSubmission spec =
     validateDecoder Nothing
       spec localTxSubmissionCodec
       [ SomeAgency $ ClientAgency LocalTxSubmission.TokIdle
       , SomeAgency $ ServerAgency LocalTxSubmission.TokBusy
+      ]
+      100
+
+
+unit_decodeLocalTxMonitor
+  :: CDDLSpec (LocalTxMonitor TxId Tx SlotNo)
+  -> Assertion
+unit_decodeLocalTxMonitor spec =
+    validateDecoder Nothing
+      spec localTxMonitorCodec
+      [ SomeAgency $ ClientAgency LocalTxMonitor.TokIdle
+      , SomeAgency $ ClientAgency LocalTxMonitor.TokAcquired
+      , SomeAgency $ ServerAgency LocalTxMonitor.TokAcquiring
+      , SomeAgency $ ServerAgency (LocalTxMonitor.TokBusy LocalTxMonitor.TokNextTx)
+      , SomeAgency $ ServerAgency (LocalTxMonitor.TokBusy LocalTxMonitor.TokHasTx)
+      , SomeAgency $ ServerAgency (LocalTxMonitor.TokBusy LocalTxMonitor.TokGetSizes)
       ]
       100
 
