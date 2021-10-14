@@ -314,6 +314,7 @@ addBlockSync cdb@CDB {..} blkToAdd = do
     trace $
       DoneAddingBlock
         (blockRealPoint b)
+        (Ignorable b)
         whenItWasForged
         whenItWasEnqueued
         newTip
