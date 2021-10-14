@@ -56,6 +56,13 @@ may appear out of chronological order.
 The internals of each entry are organized similar to
 https://keepachangelog.com/en/1.1.0/, adapted to our plan explained above.
 
+## Circa 2021-10-14
+
+### Added
+
+- New supported node to client version `NodeToClientV_11` with a new mini-protocol:
+  - `LocalTxMonitor`: Query information about the node's local mempool. 
+
 ## Circa 2021-09-22
 
 ### Added
