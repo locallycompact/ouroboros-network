@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE DeriveTraversable   #-}
 {-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE FlexibleContexts    #-}
@@ -25,18 +24,19 @@ module Simulation.Network.Snocket
     withSnocket
   , UniverseState (..)
   , ResourceException (..)
+  , SDUSize
+  , Script (..)
+  , Size
   , SnocketTrace (..)
-  , TimeoutDetail (..)
   , SockType (..)
   , OpenType (..)
 
   , NormalisedId (..)
   , BearerInfo (..)
   , SuccessOrFailure (..)
-  , Size
+  , TimeoutDetail (..)
   , noAttenuation
   , FD
-  , SDUSize
 
   , GlobalAddressScheme (..)
   , AddressType (..)
@@ -75,7 +75,8 @@ import           Ouroboros.Network.ConnectionManager.Types (AddressType (..))
 import           Ouroboros.Network.Snocket
 
 import           Ouroboros.Network.Testing.Data.Script
-                  (Script(..), initScriptSTM, stepScriptPureSTM)
+                  (Script(..), initScriptSTM, stepScriptSTM, stepScriptPureSTM
+                    , stepScriptPureSTM')
 
 data Connection m addr = Connection
     { -- | Attenuated channels of a connection.
@@ -196,13 +197,23 @@ data NetworkState m addr = NetworkState {
 
       -- | Registry of active connections.
       --
-      nsConnections       :: StrictTVar m (Map (NormalisedId addr) (Connection m addr)),
+      nsConnections       :: StrictTVar
+                              m
+                              (Map (NormalisedId addr) (Connection m addr)),
 
       -- | Get an unused ephemeral address.
       --
       nsNextEphemeralAddr :: AddressType -> STM m addr,
 
-      nsBearerInfo        :: LazySTM.TVar m (Script BearerInfo)
+      nsBearerInfo        :: LazySTM.TVar
+                              m
+                              (Script (LazySTM.STM m (LazySTM.TVar m (Script BearerInfo)))),
+
+      -- | Get the BearerInfo Script for a given connection.
+      --
+      nsAttenuationMap    :: StrictTVar
+                              m (Map (ConnectionId addr)
+                                     (LazySTM.TVar m (Script BearerInfo)))
 
     }
 
@@ -284,10 +295,10 @@ newNetworkState
        ( MonadLabelledSTM m
        , GlobalAddressScheme peerAddr
        )
-    => Script BearerInfo
+    => Script (Script BearerInfo)
     -- ^ the largest ephemeral address
     -> m (NetworkState m (TestAddress peerAddr))
-newNetworkState bearerInfoScript = atomically $ do
+newNetworkState script = atomically $ do
   (v :: StrictTVar m Natural) <- newTVar 0
   let nextEphemeralAddr :: AddressType -> STM m (TestAddress peerAddr)
       nextEphemeralAddr addrType = do
@@ -295,6 +306,7 @@ newNetworkState bearerInfoScript = atomically $ do
         -- include PR #3172.
          a <- stateTVar v (\s -> let s' = succ s in (s', s'))
          return (ephemeralAddress addrType a)
+
   s <- NetworkState
     -- nsListeningFDs
     <$> newTVar Map.empty
@@ -303,7 +315,10 @@ newNetworkState bearerInfoScript = atomically $ do
     -- nsNextEphemeralAddr
     <*> pure nextEphemeralAddr
     -- nsBearerInfo
-    <*> initScriptSTM bearerInfoScript
+    <*> LazySTM.newTVar (initScriptSTM <$> script)
+    -- attenuationMap
+    <*> newTVar Map.empty
+
   labelTVar (nsListeningFDs s)   "nsListeningFDs"
   labelTVar (nsConnections s)    "nsConnections"
   return s
@@ -359,7 +374,7 @@ withSnocket
        )
     => Tracer m (WithAddr (TestAddress peerAddr)
                           (SnocketTrace m (TestAddress peerAddr)))
-    -> Script BearerInfo
+    -> Script (Script BearerInfo)
     -> (Snocket m (FD m (TestAddress peerAddr)) (TestAddress peerAddr)
         -> m (UniverseState (TestAddress peerAddr))
         -> m a)
@@ -693,12 +708,22 @@ mkSnocket state tr = Snocket { getLocalAddr
           -- accepted.
           FDUninitialised mbLocalAddr -> mask $ \unmask -> do
             (connId, bearerInfo, simOpen) <- atomically $ do
-              bearerInfo <- stepScriptPureSTM (nsBearerInfo state)
               localAddress <-
                 case mbLocalAddr of
                   Just addr -> return addr
                   Nothing   -> nsNextEphemeralAddr state (getAddressType remoteAddress)
               let connId = ConnectionId { localAddress, remoteAddress }
+
+              attenuationMap <- readTVar (nsAttenuationMap state)
+
+              bearerInfo <- case Map.lookup connId attenuationMap of
+                Nothing     -> do
+                  script <- stepScriptSTM (nsBearerInfo state)
+                  writeTVar (nsAttenuationMap state)
+                            (Map.insert connId script attenuationMap)
+                  stepScriptPureSTM' script
+
+                Just script -> stepScriptPureSTM script
 
               connMap <- readTVar (nsConnections state)
               case Map.lookup (normaliseId connId) connMap of
