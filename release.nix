@@ -76,6 +76,7 @@ let
       testsPaths = path: [ ([ "tests" ] ++ path) ([ "haskellPackages" (head path) "components" "tests" ] ++ (tail path)) ];
       # as well as exes:
       exesPaths = path: [ ([ "exes" ] ++ path) ([ "haskellPackages" (head path) "components" "exes" ] ++ (tail path)) ];
+      stylePaths = path: [ ([ "checks" "styles" ] ++ path) ([ "haskellPackages" (head path) "checks" ] ++ (tail path)) ];
     in
     [ [ "shell" ] ]
     ++ (optionals (!withProblematicWindowsTests) (
@@ -93,6 +94,7 @@ let
     ++ (testsPaths [ "ouroboros-network" "cddl" ])
     ++ (checksPaths [ "ouroboros-network" "cddl" ])
     ++ (exesPaths [ "network-mux" "cardano-ping" ])
+    ++ (stylePaths [ "check-nixpkgs-fmt" "check-stylish" ])
     ++ onlyBuildOnDefaultSystem;
 
   # Remove build jobs for which cross compiling does not make sense.
