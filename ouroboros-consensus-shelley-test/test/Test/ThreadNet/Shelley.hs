@@ -114,15 +114,6 @@ instance Arbitrary NightlyTestSetup where
   arbitrary = do
       setup <- arbitrary
 
-      -- At time of writing, this causes 100 tests to have an expected run time
-      -- of half an hour on the BuildKite queue=bench machine.
-      --
-      -- 100 extended tests has an average run time of 4643 seconds (cf
-      -- https://buildkite.com/input-output-hk/ouroboros-network-nightly/builds/167
-      -- ). 100 unextended tests has an average of 689 seconds (cf
-      -- https://buildkite.com/input-output-hk/ouroboros-network-nightly/builds/164).
-      --
-      -- 3/4*689 + 1/4*4643 seconds =~= 28 minutes.
       moreEpochs <- frequency [(3, pure False), (1, pure True)]
 
       NightlyTestSetup <$> if not moreEpochs then pure setup else do
