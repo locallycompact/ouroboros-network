@@ -1,14 +1,21 @@
-{ runCommand, git, nixpkgs-fmt }:
+{ runCommand, git, lib, nixpkgs-fmt }:
 
 runCommand "check-nixpkgs-fmt"
 {
+  meta.platforms = with lib.platforms; [ linux ];
   buildInputs = [ git nixpkgs-fmt ];
   src = ./..;
 }
   ''
     unpackPhase
     cd $sourceRoot
-    cp ./scripts/ci/check-nixpkgs-fmt.sh ./scripts/ci/patchednixpkgsFmt.sh
-    patchShebangs ./scripts/ci/patchednixpkgsFmt.sh
-    ./scripts/ci/patchednixpkgsFmt.sh
+    git init
+    git config user.email "devops@iohk.io"
+    git config user.name "Hydra CI"
+    git config advice.addIgnoredFile false
+    git add *
+    git commit -m "Hydra CI"
+    cp ./scripts/ci/check-nixpkgs-fmt.sh ./scripts/ci/patchedNixpkgsFmt.sh
+    patchShebangs ./scripts/ci/patchedNixpkgsFmt.sh
+    ./scripts/ci/patchedNixpkgsFmt.sh
   ''
