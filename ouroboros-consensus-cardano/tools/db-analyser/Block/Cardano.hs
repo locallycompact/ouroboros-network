@@ -49,6 +49,7 @@ import           Block.Alonzo (Args (..))
 import           Block.Byron (Args (..), openGenesisByron)
 import           Block.Shelley (Args (..))
 import           HasAnalysis
+import Data.Maybe (fromJust)
 
 analyseBlock ::
      (forall blk. HasAnalysis blk => blk -> a)
@@ -62,33 +63,36 @@ analyseBlock f =
     p :: Proxy HasAnalysis
     p = Proxy
 
-analyseWithLedgerState :: forall a.
-     (forall blk. HasAnalysis blk => WithLedgerState blk -> a)
-  -> WithLedgerState (CardanoBlock StandardCrypto)
-  -> a
+analyseWithLedgerState ::
+  forall a.
+  (forall blk. HasAnalysis blk => WithLedgerState blk -> a) ->
+  WithLedgerState (CardanoBlock StandardCrypto) ->
+  a
 analyseWithLedgerState f (WithLedgerState cb sb sa) =
-      hcollapse
+  hcollapse
     . hcmap p (K . f)
-    $ hzipWith3
-        (\sb' sa' (I blk) -> WithLedgerState blk sb' sa')
-        (goLS sb)
-        (goLS sa)
-        oeb
+    . fromJust
+    . hsequence'
+    $ hzipWith3 zipLS (goLS sb) (goLS sa) oeb
   where
     p :: Proxy HasAnalysis
     p = Proxy
 
-    oeb = getOneEraBlock
-        . getHardForkBlock
-        $ cb
+    zipLS (Comp (Just sb')) (Comp (Just sa')) (I blk) =
+      Comp . Just $ WithLedgerState blk sb' sa'
+    zipLS _ _ _ = Comp Nothing
 
-    goLS :: LedgerState (CardanoBlock StandardCrypto)
-          -> NP LedgerState (CardanoEras StandardCrypto)
-    goLS = hexpand (error "This should not happen")
-            . hmap currentState
-            . Telescope.tip
-            . getHardForkState
-            . hardForkLedgerStatePerEra
+    oeb = getOneEraBlock . getHardForkBlock $ cb
+
+    goLS ::
+      LedgerState (CardanoBlock StandardCrypto) ->
+      NP (Maybe :.: LedgerState) (CardanoEras StandardCrypto)
+    goLS =
+      hexpand (Comp Nothing)
+        . hmap (Comp . Just . currentState)
+        . Telescope.tip
+        . getHardForkState
+        . hardForkLedgerStatePerEra
 
 instance HasProtocolInfo (CardanoBlock StandardCrypto) where
   data Args (CardanoBlock StandardCrypto) =
