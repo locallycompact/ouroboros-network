@@ -1,9 +1,11 @@
 {-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE MultiParamTypeClasses   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -22,8 +24,11 @@ import qualified Cardano.Chain.Genesis as Byron.Genesis
 import qualified Cardano.Chain.Update as Byron.Update
 
 import           Ouroboros.Consensus.Block
+import           Ouroboros.Consensus.Ledger.Abstract
 import           Ouroboros.Consensus.HardFork.Combinator (HardForkBlock (..),
-                     OneEraBlock (..), OneEraHash (..))
+                     OneEraBlock (..), OneEraHash (..), getHardForkState, hardForkLedgerStatePerEra)
+import Ouroboros.Consensus.HardFork.Combinator.State (currentState)
+import qualified Ouroboros.Consensus.HardFork.Combinator.Util.Telescope as Telescope
 import qualified Ouroboros.Consensus.Mempool.TxLimits as TxLimits
 import           Ouroboros.Consensus.Node.ProtocolInfo
 
@@ -33,6 +38,7 @@ import           Cardano.Ledger.Crypto
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
 
 import           Ouroboros.Consensus.Cardano
+import           Ouroboros.Consensus.Cardano.Block (CardanoEras)
 import           Ouroboros.Consensus.Cardano.Node (TriggerHardFork (..),
                      protocolInfoCardano)
 import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo,
@@ -55,6 +61,34 @@ analyseBlock f =
   where
     p :: Proxy HasAnalysis
     p = Proxy
+
+analyseWithLedgerState :: forall a.
+     (forall blk. HasAnalysis blk => WithLedgerState blk -> a)
+  -> WithLedgerState (CardanoBlock StandardCrypto)
+  -> a
+analyseWithLedgerState f (WithLedgerState cb sb sa) =
+      hcollapse
+    . hcmap p (K . f)
+    $ hzipWith3
+        (\sb' sa' (I blk) -> WithLedgerState blk sb' sa')
+        (goLS sb)
+        (goLS sa)
+        oeb
+  where
+    p :: Proxy HasAnalysis
+    p = Proxy
+
+    oeb = getOneEraBlock
+        . getHardForkBlock
+        $ cb
+
+    goLS :: LedgerState (CardanoBlock StandardCrypto)
+          -> NP LedgerState (CardanoEras StandardCrypto)
+    goLS = hexpand (error "This should not happen")
+            . hmap currentState
+            . Telescope.tip
+            . getHardForkState
+            . hardForkLedgerStatePerEra
 
 instance HasProtocolInfo (CardanoBlock StandardCrypto) where
   data Args (CardanoBlock StandardCrypto) =
@@ -81,6 +115,8 @@ instance HasAnalysis (CardanoBlock StandardCrypto) where
   knownEBBs _    =
       Map.mapKeys castHeaderHash . Map.map castChainHash $
         knownEBBs (Proxy @ByronBlock)
+
+  emitTraces = analyseWithLedgerState emitTraces
 
 type CardanoBlockArgs = Args (CardanoBlock StandardCrypto)
 
