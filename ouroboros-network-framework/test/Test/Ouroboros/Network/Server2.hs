@@ -2067,8 +2067,8 @@ prop_connection_manager_no_invalid_traces serverAcc (ArbDataFlow dataFlow)
                      , ppScript (MultiNodeScript l)
                      , "========== ConnectionManager Events =========="
                      , Trace.ppTrace show show evsCMT
-                     , "========== Simulation Trace =========="
-                     , ppTrace trace
+                     -- , "========== Simulation Trace =========="
+                     -- , ppTrace trace
                      ])
     . getAllProperty
     . bifoldMap
@@ -2078,7 +2078,7 @@ prop_connection_manager_no_invalid_traces serverAcc (ArbDataFlow dataFlow)
        )
        ( \ tr
         -> case tr of
-          TrUnexpectedlyMissingConnectionState _ ->
+          TrCMUnexpectedlyFalseAssertion _ ->
             AllProperty (counterexample (show tr) False)
           _                                       ->
             mempty
