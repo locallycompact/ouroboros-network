@@ -89,8 +89,8 @@ runAnalysis analysisName env@(AnalysisEnv { tracer }) = do
     go OnlyValidation              = return ()
     go (StoreLedgerStateAt slotNo) = (storeLedgerStateAt slotNo) env
     go CountBlocks                 = countBlocks env
-    go (CheckNoThunksEvery nBks)   = checkNoThunksEvery nBks
-    go TraceLedgerProcessing       = traceLedgerProcessing
+    go (CheckNoThunksEvery nBks)   = checkNoThunksEvery nBks env
+    go TraceLedgerProcessing       = traceLedgerProcessing env
 
 type Analysis blk = AnalysisEnv IO blk -> IO ()
 
