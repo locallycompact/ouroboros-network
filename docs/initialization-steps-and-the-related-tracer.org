@@ -372,7 +372,7 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
 *** open ImmutableDB
 
     When ImmutableDB opens it will:
-    + create a directory in the file system if one does not exists
+    + create a directory in the file system if one does not exist
     + perform migration of old files
     + perform validation as per the ~ValidationPolicy~, this returns most recent chunk
     + create ~cachedIndex~ for the most recent chunk
@@ -425,7 +425,7 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
 *** open VolatileDB
 
     When VolatileDB opens it will:
-    + create a directory in the file system if one does not exists
+    + create a directory in the file system if one does not exist
     + open state
 
     While executing, ~VolatileDB~ will use events described in [[*~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events][~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events]]
@@ -445,7 +445,57 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
 
      No other events are created
 
-*** TODO open LgrDB
+
+*** open LgrDB
+
+    When LgrDB opens it will:
+    + create a directory in the file system if one does not exist
+    + initialize ~LgrDB~ from disk
+    + prune ~LgrDB~
+
+    While executing, ~LgrDB~ will use events described in  [[*~TraceLedgerEvent~ &
+    ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events][~TraceLedgerEvent~ &
+    ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events]]
+
+    Below more details about each execution step:
+
+**** create a directory
+
+     There are *no* events created.
+
+**** initialize ~LgrDB~ from disk
+
+     First it needs to select a starting ledger state with which it will
+     initialize ~LgrDB~. In order to do that, list of all available snapshots is
+     retrieved from the disk. Two things may happen:
+
+     + there are no valid snapshots available
+     + there is at least one valid snapshot available
+
+***** there are no valid snapshots available
+
+      If there are no valid snapshots available, it will:
+      + fire an event ~ReplayFromGenesis~
+      + create a ~LedgerDB~ anchored at Genesis
+      + start initialization with that ~LedgerDB~
+
+***** there is at least one valid snapshot available
+
+      If there is at least one valid snapshot available, it will:
+
+      + fire an event ~ReplayFromSnapshot~
+      + create a ~LedgerDB~ anchored at that snapshot
+      + start initialization with that ~LedgerDB~
+
+     Initialization builds a ~LedgerDB~ by folding over blocks returned by the
+     ~ImmutableDB~, starting from the block corresponding to the anchor of the
+     initial ~LedgerDB~ going up to the tip of the ~ImmutableDB~.
+     Each block is then validated, applied to existing ledger state, and extend
+     the current ~LedgerDB~ with a new state.
+     This process is called a replay.
+
+     For each block that we replay a ~ReplayedBlock~ is fired
+
 *** TODO initialize chain selection
 
 
