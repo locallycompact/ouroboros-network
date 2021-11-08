@@ -422,7 +422,29 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
 
      There are *no* events created.
 
-*** TODO open VolatileDB
+*** open VolatileDB
+
+    When VolatileDB opens it will:
+    + create a directory in the file system if one does not exists
+    + open state
+
+    While executing, ~VolatileDB~ will use events described in [[*~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events][~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events]]
+
+    Below more details about each execution step:
+
+**** create a directory
+
+     There are *no* events created.
+
+**** open state
+
+     While opening the DB files it may fire events regarding errors like:
+
+     + invalid file names (~traceWith tracer $ InvalidFileNames invalid~)
+     + validating files (~traceWith tracer $ Truncate e file offset~)
+
+     No other events are created
+
 *** TODO open LgrDB
 *** TODO initialize chain selection
 
