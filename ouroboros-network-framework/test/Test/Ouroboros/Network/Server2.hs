@@ -115,9 +115,9 @@ import           Test.Ouroboros.Network.Orphans ()  -- ShowProxy ReqResp instanc
 import           Test.Simulation.Network.Snocket hiding (tests)
 import           Test.Ouroboros.Network.ConnectionManager (verifyAbstractTransition)
 import           Ouroboros.Network.Testing.Data.AbsBearerInfo
-                   (NonFailingBearerInfoScript(..), AbsBearerInfo (..),
+                   (NonFailingAbsBearerInfoScript(..), AbsBearerInfo (..),
                     AbsDelay (..), AbsAttenuation (..), AbsSpeed (..),
-                    AbsSDUSize (..), BearerInfoScript (..))
+                    AbsSDUSize (..), AbsBearerInfoScript (..))
 
 tests :: TestTree
 tests =
@@ -836,7 +836,7 @@ unidirectionalExperiment timeouts snocket socket clientAndServerData = do
                 (property True)
                 $ zip rs (expectedResult clientAndServerData clientAndServerData)
 
-prop_unidirectional_Sim :: Script NonFailingBearerInfoScript
+prop_unidirectional_Sim :: Script NonFailingAbsBearerInfoScript
                         -> ClientAndServerData Int
                         -> Property
 prop_unidirectional_Sim script clientAndServerData =
@@ -996,7 +996,7 @@ bidirectionalExperiment
                 ))
 
 
-prop_bidirectional_Sim :: Script NonFailingBearerInfoScript -> ClientAndServerData Int -> ClientAndServerData Int -> Property
+prop_bidirectional_Sim :: Script NonFailingAbsBearerInfoScript -> ClientAndServerData Int -> ClientAndServerData Int -> Property
 prop_bidirectional_Sim script data0 data1 =
   simulatedPropertyWithTimeout 7200 $
     withSnocket sayTracer
@@ -1991,7 +1991,7 @@ verifyRemoteTransitionOrder (h:t) = go t h
 --
 prop_connection_manager_valid_transitions :: Int
                                           -> ArbDataFlow
-                                          -> Script BearerInfoScript
+                                          -> Script AbsBearerInfoScript
                                           -> MultiNodeScript Int TestAddr
                                           -> Property
 prop_connection_manager_valid_transitions serverAcc (ArbDataFlow dataFlow)
@@ -2061,7 +2061,7 @@ prop_connection_manager_valid_transitions serverAcc (ArbDataFlow dataFlow)
 --
 prop_connection_manager_no_invalid_traces :: Int
                                           -> ArbDataFlow
-                                          -> Script BearerInfoScript
+                                          -> Script AbsBearerInfoScript
                                           -> MultiNodeScript Int TestAddr
                                           -> Property
 prop_connection_manager_no_invalid_traces serverAcc (ArbDataFlow dataFlow)
@@ -2112,7 +2112,7 @@ prop_connection_manager_no_invalid_traces serverAcc (ArbDataFlow dataFlow)
 --
 prop_connection_manager_valid_transition_order :: Int
                                                -> ArbDataFlow
-                                               -> Script BearerInfoScript
+                                               -> Script AbsBearerInfoScript
                                                -> MultiNodeScript Int TestAddr
                                                -> Property
 prop_connection_manager_valid_transition_order serverAcc (ArbDataFlow dataFlow)
@@ -2155,7 +2155,7 @@ prop_connection_manager_valid_transition_order serverAcc (ArbDataFlow dataFlow)
 --
 prop_connection_manager_counters :: Int
                                -> ArbDataFlow
-                               -> Script NonFailingBearerInfoScript
+                               -> Script NonFailingAbsBearerInfoScript
                                -> MultiNodeScript Int TestAddr
                                -> Property
 prop_connection_manager_counters serverAcc (ArbDataFlow dataFlow)
@@ -2316,7 +2316,7 @@ prop_connection_manager_counters serverAcc (ArbDataFlow dataFlow)
 --
 prop_inbound_governor_valid_transitions :: Int
                                         -> ArbDataFlow
-                                        -> Script BearerInfoScript
+                                        -> Script AbsBearerInfoScript
                                         -> MultiNodeScript Int TestAddr
                                         -> Property
 prop_inbound_governor_valid_transitions serverAcc (ArbDataFlow dataFlow)
@@ -2357,7 +2357,7 @@ prop_inbound_governor_valid_transitions serverAcc (ArbDataFlow dataFlow)
 --
 prop_inbound_governor_no_unsupported_state :: Int
                                            -> ArbDataFlow
-                                           -> Script BearerInfoScript
+                                           -> Script AbsBearerInfoScript
                                            -> MultiNodeScript Int TestAddr
                                            -> Property
 prop_inbound_governor_no_unsupported_state serverAcc (ArbDataFlow dataFlow)
@@ -2408,7 +2408,7 @@ prop_inbound_governor_no_unsupported_state serverAcc (ArbDataFlow dataFlow)
 --
 prop_inbound_governor_valid_transition_order :: Int
                                              -> ArbDataFlow
-                                             -> Script BearerInfoScript
+                                             -> Script AbsBearerInfoScript
                                              -> MultiNodeScript Int TestAddr
                                              -> Property
 prop_inbound_governor_valid_transition_order serverAcc (ArbDataFlow dataFlow)
@@ -2447,7 +2447,7 @@ prop_inbound_governor_valid_transition_order serverAcc (ArbDataFlow dataFlow)
 --
 prop_inbound_governor_counters :: Int
                                -> ArbDataFlow
-                               -> Script NonFailingBearerInfoScript
+                               -> Script NonFailingAbsBearerInfoScript
                                -> MultiNodeScript Int TestAddr
                                -> Property
 prop_inbound_governor_counters serverAcc (ArbDataFlow dataFlow)
@@ -2553,7 +2553,7 @@ prop_inbound_governor_counters serverAcc (ArbDataFlow dataFlow)
 -- Manager.
 --
 prop_connection_manager_pruning :: Int
-                                -> Script NonFailingBearerInfoScript
+                                -> Script NonFailingAbsBearerInfoScript
                                 -> MultiNodePruningScript Int
                                 -> Property
 prop_connection_manager_pruning serverAcc
@@ -2624,7 +2624,7 @@ prop_connection_manager_pruning serverAcc
 -- Inbound Governor.
 --
 prop_inbound_governor_pruning :: Int
-                              -> Script NonFailingBearerInfoScript
+                              -> Script NonFailingAbsBearerInfoScript
                               -> MultiNodePruningScript Int
                               -> Property
 prop_inbound_governor_pruning serverAcc
@@ -2715,7 +2715,7 @@ prop_inbound_governor_pruning serverAcc
 -- We test that we never go above hard limit of incoming connections.
 --
 prop_never_above_hardlimit :: Int
-                           -> Script NonFailingBearerInfoScript
+                           -> Script NonFailingAbsBearerInfoScript
                            -> MultiNodePruningScript Int
                            -> Property
 prop_never_above_hardlimit serverAcc
@@ -2811,7 +2811,7 @@ unit_connection_terminated_when_negotiating =
         Script
         $ NonEmpty.fromList
         $ replicate 4
-        $ BearerInfoScript
+        $ AbsBearerInfoScript
         $ Script
         $ NonEmpty.fromList
         $ repeat
