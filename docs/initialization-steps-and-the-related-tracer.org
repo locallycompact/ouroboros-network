@@ -17,6 +17,8 @@ Consensus entry point for Node is ~Ouroboros.Consensus.Node~ and its function
 + setup the NodeKernel
 + initialize the network layer
 
+This document focuses on the initialization steps of opening ChainDB.
+
 * Open Chain DB
 ** Tracers
 
@@ -579,3 +581,39 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
       future which do no exceed the clock skew.
     + ~CandidateContainsFutureBlocksExceedingClockSkew~ - Candidate contains
       headers from the future which exceed the clock skew, making them invalid.
+
+* Node execution logs
+
+  Reading the [[*Node execution logs][Node execution logs]] we can clearly see that there is a significant
+  time delay between ~TraceOpenEvent OpenedVolatileDB~ ("Opened vol db") and ~ReplayFromSnapshot~
+  ("Replaying ledger from snapshot DiskSnapshot").
+
+
+#+CAPTION: Node logs, with DEBUG mode disabled
+#+BEGIN_SRC
+> run
+
+Up to date
+Listening on http://127.0.0.1:12798
+(...)
+[2021-11-03 14:02:55.62 UTC] Opened imm db with immutable tip at 9344abd8dfa11e5a4313e4fbe9cc99a2c9cd4c3c20beedacb17eeffc51cfa84a at slot 44152233 and chunk 2044
+[2021-11-03 14:02:57.61 UTC] Opened vol db
+[2021-11-03 14:03:20.23 UTC] Replaying ledger from snapshot DiskSnapshot {dsNumber = 44148901, dsSuffix = Nothing} at 0b14749bf136d7fea9b527f0bf7f4d6d96e15e75b357cead4c784670f0d5e683 at slot 44148901
+[2021-11-03 14:03:20.64 UTC] Replayed block: slot SlotNo 44148918 of At (SlotNo 44152233)
+[2021-11-03 14:03:20.93 UTC] before next, messages elided = 44148950
+[2021-11-03 14:03:20.93 UTC] Replayed block: slot SlotNo 44150308 of At (SlotNo 44152233)
+[2021-11-03 14:03:20.94 UTC] Replayed block: slot SlotNo 44150342 of At (SlotNo 44152233)
+[2021-11-03 14:03:21.34 UTC] before next, messages elided = 44150408
+[2021-11-03 14:03:21.34 UTC] Replayed block: slot SlotNo 44152233 of At (SlotNo 44152233)
+[2021-11-03 14:03:21.34 UTC] Opened lgr db
+[2021-11-03 14:03:39.18 UTC] Opened db with immutable tip at 9344abd8dfa11e5a4313e4fbe9cc99a2c9cd4c3c20beedacb17eeffc51cfa84a at slot 44152233 and tip a3f4144c279544b2e38b136fa6b367fd175030637178fc4f794f2ca14bf5d22d at slot 44196470
+(...)
+[2021-11-03 14:03:39.62 UTC] Chain extended, new tip: 56813400a116a71eaed4873d9e965db9830019bbff2c719d8f9caefebc5de479 at slot 44196499
+[2021-11-03 14:03:39.80 UTC] Chain extended, new tip: f424ce974dd8fbddc1c8b9740f7cde0b46b7dfc73d1e44dfd964f7df507bb546 at slot 44196959
+[2021-11-03 14:07:02.27 UTC] Chain extended, new tip: 0afb99b3ae89fdac6ecb202e6cf75d18e52828fc08bcbc27a754bc97faea5a7c at slot 44333952
+(...)
+[sterling:cardano.node.ChainDB:Info:35] [2021-11-03 14:07:03.21 UTC] Valid candidate 1263f0d7e9c10aecaadc00ba332d401216941d8ac26a641ddb3217332dd895df at slot 44335889
+#+END_SRC
+
+** TODO Consider adding more events in between
+   So that there is no +20 seconds delay between two consecutive events
