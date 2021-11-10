@@ -17,10 +17,15 @@ Consensus entry point for Node is ~Ouroboros.Consensus.Node~ and its function
 + setup the NodeKernel
 + initialize the network layer
 
-This document focuses on the initialization steps of opening ChainDB.
+This document focuses solely on the initialization steps of opening ChainDB. The
+[[*Tracers & events][Tracers & events]] chapter lists and describes possible events that might get
+fired by the Consensus while we open the ChainDB. The [[*Open Chain DB execution steps][Open Chain DB execution
+steps]] chapter describes in detail the execution steps that Consensus takes while
+opening the ChainDB. Lastly the [[*Node execution logs][Node execution logs]] chapter describes potential
+places where we could add more events.
 
-* Open Chain DB
-** Tracers
+
+* Tracers & events
 
    When calling a ~runWith~ function, on of the arguments we pass is a
    ~LowLevelRunNodeArgs~
@@ -78,38 +83,38 @@ openDB
   1. ~cdbTracer~ tracing ~TraceEvent~ from ~Ouroboros.Consensus.Storage.ChainDB.Impl.Types~
   2. ~cdbTraceLedger~ tracing ~LedgerDB' blk~
 
-*** cdbTracer
+** cdbTracer
 
-    ~cdbTracer~ traces ~TraceEvent~ events that are defined in
-    ~Ouroboros.Consensus.Storage.ChainDB.Impl.Types~.
+   ~cdbTracer~ traces ~TraceEvent~ events that are defined in
+   ~Ouroboros.Consensus.Storage.ChainDB.Impl.Types~.
 
- #+BEGIN_SRC haskell
- data TraceEvent blk
-   = TraceAddBlockEvent          (TraceAddBlockEvent           blk)
-   | TraceFollowerEvent          (TraceFollowerEvent           blk)
-   | TraceCopyToImmutableDBEvent (TraceCopyToImmutableDBEvent  blk)
-   | TraceGCEvent                (TraceGCEvent                 blk)
-   | TraceInitChainSelEvent      (TraceInitChainSelEvent       blk)
-   | TraceOpenEvent              (TraceOpenEvent               blk)
-   | TraceIteratorEvent          (TraceIteratorEvent           blk)
-   | TraceLedgerEvent            (LgrDB.TraceEvent             blk)
-   | TraceLedgerReplayEvent      (LgrDB.TraceLedgerReplayEvent blk)
-   | TraceImmutableDBEvent       (ImmutableDB.TraceEvent       blk)
-   | TraceVolatileDBEvent        (VolatileDB.TraceEvent        blk)
-   deriving (Generic)
- #+END_SRC
+#+BEGIN_SRC haskell
+data TraceEvent blk
+  = TraceAddBlockEvent          (TraceAddBlockEvent           blk)
+  | TraceFollowerEvent          (TraceFollowerEvent           blk)
+  | TraceCopyToImmutableDBEvent (TraceCopyToImmutableDBEvent  blk)
+  | TraceGCEvent                (TraceGCEvent                 blk)
+  | TraceInitChainSelEvent      (TraceInitChainSelEvent       blk)
+  | TraceOpenEvent              (TraceOpenEvent               blk)
+  | TraceIteratorEvent          (TraceIteratorEvent           blk)
+  | TraceLedgerEvent            (LgrDB.TraceEvent             blk)
+  | TraceLedgerReplayEvent      (LgrDB.TraceLedgerReplayEvent blk)
+  | TraceImmutableDBEvent       (ImmutableDB.TraceEvent       blk)
+  | TraceVolatileDBEvent        (VolatileDB.TraceEvent        blk)
+  deriving (Generic)
+#+END_SRC
 
-     There few events that are relevant to ~ChainDB.openDB~
-     + ~TraceOpenEvent~
-     + ~TraceImmutableDBEvent~
-     + ~TraceVolatileDBEvent~
-     + ~TraceLedgerEvent~
-     + ~TraceLedgerReplayEvent~
-     + ~TraceInitChainSelEvent~
+    There few events that are relevant to ~ChainDB.openDB~
+    + ~TraceOpenEvent~
+    + ~TraceImmutableDBEvent~
+    + ~TraceVolatileDBEvent~
+    + ~TraceLedgerEvent~
+    + ~TraceLedgerReplayEvent~
+    + ~TraceInitChainSelEvent~
 
-     Below we look at each event more closely.
+    Below we look at each event more closely.
 
-**** ~TraceOpenEvent~ - a.k.a opening events
+*** ~TraceOpenEvent~ - a.k.a opening events
 
 #+BEGIN_SRC haskell
    | TraceOpenEvent              (TraceOpenEvent               blk)
@@ -143,7 +148,7 @@ data TraceOpenEvent blk =
   deriving (Generic, Eq, Show)
     #+END_SRC
 
-**** ~TraceImmutableDBEvent~ - a.k.a ~ImmutableDB~'s events
+*** ~TraceImmutableDBEvent~ - a.k.a ~ImmutableDB~'s events
 
 #+BEGIN_SRC haskell
    | TraceImmutableDBEvent       (ImmutableDB.TraceEvent       blk)
@@ -195,69 +200,69 @@ data TraceOpenEvent blk =
      + ~Migrating~
      + ~ValidatingChunk~
 
-**** ~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events
+*** ~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events
+
+    #+BEGIN_SRC haskell
+  | TraceVolatileDBEvent        (VolatileDB.TraceEvent        blk)
+    #+END_SRC
+
+    VolatileDB has its own set of events defined at ~Ouroboros.Consensus.Storage.VolatileDB.Impl.Types~
+
+    #+BEGIN_SRC haskell
+data TraceEvent blk
+    = DBAlreadyClosed
+    | DBAlreadyOpen
+    | BlockAlreadyHere (HeaderHash blk)
+    | TruncateCurrentFile FsPath
+    | Truncate (ParseError blk) FsPath BlockOffset
+    | InvalidFileNames [FsPath]
+  deriving (Eq, Generic, Show)
+    #+END_SRC
+
+    Because we have a constructor ~TraceVolatileDBEvent ::
+    VolatileDB.TraceEvent -> ChainDB.TraceEvent~  we can define a tracer for
+    ~VolatileDB~'s events with a ~contramap~ from ~Data.Functor.Contravariant~
+    using existing ~cdbTracer~ (from ~ChainDbArgs~).
+
+    #+BEGIN_SRC haskell
+        , volTracer           = contramap TraceVolatileDBEvent cdbTracer
+    #+END_SRC
+*** ~TraceLedgerEvent~ & ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events
+
+
+    ~LedgerDB~ has two sets of events defined in
+    ~Ouroboros.Consensus.Storage.LedgerDB.OnDisk~, those are ~TraceEvent~ and
+    ~TraceLedgerReplayEvent~
+
+**** ~TraceEvent~
+
+    #+BEGIN_SRC haskell
+  | TraceLedgerEvent            (LgrDB.TraceEvent             blk)
+    #+END_SRC
 
      #+BEGIN_SRC haskell
-   | TraceVolatileDBEvent        (VolatileDB.TraceEvent        blk)
+data TraceEvent blk
+  = InvalidSnapshot DiskSnapshot (InitFailure blk)
+    -- ^ An on disk snapshot was skipped because it was invalid.
+  | TookSnapshot DiskSnapshot (RealPoint blk)
+    -- ^ A snapshot was written to disk.
+  | DeletedSnapshot DiskSnapshot
+    -- ^ An old or invalid on-disk snapshot was deleted
+  deriving (Generic, Eq, Show)
      #+END_SRC
 
-     VolatileDB has its own set of events defined at ~Ouroboros.Consensus.Storage.VolatileDB.Impl.Types~
+    Because we have a constructor ~TraceLedgerEvent ::
+    LedgerDB.TraceEvent -> ChainDB.TraceEvent~  we can define a tracer for
+    ~LedgerDB~'s events with a ~contramap~ from ~Data.Functor.Contravariant~
+    using existing ~cdbTracer~ (from ~ChainDbArgs~).
 
-     #+BEGIN_SRC haskell
- data TraceEvent blk
-     = DBAlreadyClosed
-     | DBAlreadyOpen
-     | BlockAlreadyHere (HeaderHash blk)
-     | TruncateCurrentFile FsPath
-     | Truncate (ParseError blk) FsPath BlockOffset
-     | InvalidFileNames [FsPath]
-   deriving (Eq, Generic, Show)
-     #+END_SRC
-
-     Because we have a constructor ~TraceVolatileDBEvent ::
-     VolatileDB.TraceEvent -> ChainDB.TraceEvent~  we can define a tracer for
-     ~VolatileDB~'s events with a ~contramap~ from ~Data.Functor.Contravariant~
-     using existing ~cdbTracer~ (from ~ChainDbArgs~).
-
-     #+BEGIN_SRC haskell
-         , volTracer           = contramap TraceVolatileDBEvent cdbTracer
-     #+END_SRC
-**** ~TraceLedgerEvent~ & ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events
-
-
-     ~LedgerDB~ has two sets of events defined in
-     ~Ouroboros.Consensus.Storage.LedgerDB.OnDisk~, those are ~TraceEvent~ and
-     ~TraceLedgerReplayEvent~
-
-***** ~TraceEvent~
-
-     #+BEGIN_SRC haskell
-   | TraceLedgerEvent            (LgrDB.TraceEvent             blk)
-     #+END_SRC
-
-      #+BEGIN_SRC haskell
- data TraceEvent blk
-   = InvalidSnapshot DiskSnapshot (InitFailure blk)
-     -- ^ An on disk snapshot was skipped because it was invalid.
-   | TookSnapshot DiskSnapshot (RealPoint blk)
-     -- ^ A snapshot was written to disk.
-   | DeletedSnapshot DiskSnapshot
-     -- ^ An old or invalid on-disk snapshot was deleted
-   deriving (Generic, Eq, Show)
-      #+END_SRC
-
-     Because we have a constructor ~TraceLedgerEvent ::
-     LedgerDB.TraceEvent -> ChainDB.TraceEvent~  we can define a tracer for
-     ~LedgerDB~'s events with a ~contramap~ from ~Data.Functor.Contravariant~
-     using existing ~cdbTracer~ (from ~ChainDbArgs~).
-
-     #+BEGIN_SRC haskell
-     , lgrTracer           = contramap TraceLedgerEvent cdbTracer
-     #+END_SRC
+    #+BEGIN_SRC haskell
+    , lgrTracer           = contramap TraceLedgerEvent cdbTracer
+    #+END_SRC
 
 
 
-***** ~TraceLedgerReplayEvent~
+**** ~TraceLedgerReplayEvent~
 
      #+BEGIN_SRC haskell
    | TraceLedgerReplayEvent      (LgrDB.TraceLedgerReplayEvent blk)
@@ -323,7 +328,7 @@ data TraceOpenEvent blk =
      [LedgerEvent blk] replayTo~) where ~replayTo~ will be ~()~ but thanks to
      magic of ~ContravariantFunctor~ it will be mapped to provided tip.
 
-**** ~TraceInitChainSelEvent~ - a.k.a init chain selection's events
+*** ~TraceInitChainSelEvent~ - a.k.a init chain selection's events
 
      #+BEGIN_SRC haskell
    | TraceInitChainSelEvent      (TraceInitChainSelEvent       blk)
@@ -381,7 +386,7 @@ data TraceValidationEvent blk =
 
 
 
-*** cdbTraceLedger
+** cdbTraceLedger
 
     The ~cdbTraceLedger~ is used only once in the module
     ~Ouroboros.Consensus.Storage.ChainDB.Impl.ChainSel~ in the function
@@ -419,168 +424,168 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
         traceWith cdbTraceLedger newLedger
 #+END_SRC
 
-** Open Chain DB execution
-   Chain DB openDB executes in the following way:
-   + open a ImmutableDB
-   + fire a ~TraceOpenEvent $ OpenedImmutableDB immutableDbTipPoint immutableDbTipChunk~
-   + open a VolatileDB
-   + fire a ~TraceOpenEvent OpenedVolatileDb~
-   + open a LgrDB
-   + fire a ~TraceOpenEvent OpenedLgrDB~
-   + initialize chain selection
-   + fire a ~TraceOpenEvent $ OpenedDB~
+* Open Chain DB execution steps
+  Chain DB openDB executes in the following way:
+  + open a ImmutableDB
+  + fire a ~TraceOpenEvent $ OpenedImmutableDB immutableDbTipPoint immutableDbTipChunk~
+  + open a VolatileDB
+  + fire a ~TraceOpenEvent OpenedVolatileDb~
+  + open a LgrDB
+  + fire a ~TraceOpenEvent OpenedLgrDB~
+  + initialize chain selection
+  + fire a ~TraceOpenEvent $ OpenedDB~
 
-*** open ImmutableDB
+** open ImmutableDB
 
-    When ImmutableDB opens it will:
-    + create a directory in the file system if one does not exist
-    + perform migration of old files
-    + perform validation as per the ~ValidationPolicy~, this returns most recent
-      chunk
-    + create ~cachedIndex~ for the most recent chunk
-    + open state for the most recent chunk
+   When ImmutableDB opens it will:
+   + create a directory in the file system if one does not exist
+   + perform migration of old files
+   + perform validation as per the ~ValidationPolicy~, this returns most recent
+     chunk
+   + create ~cachedIndex~ for the most recent chunk
+   + open state for the most recent chunk
 
-    While executing, ~ImmutableDB~ will use events described in [[*~TraceImmutableDBEvent~ - a.k.a ~ImmutableDB~'s
-     events][~TraceImmutableDBEvent~ - a.k.a ~ImmutableDB~'s events]]
+   While executing, ~ImmutableDB~ will use events described in [[*~TraceImmutableDBEvent~ - a.k.a ~ImmutableDB~'s
+    events][~TraceImmutableDBEvent~ - a.k.a ~ImmutableDB~'s events]]
 
-    Below more details about each execution step:
+   Below more details about each execution step:
 
-**** create a directory
+*** create a directory
 
-     There are *no* events created.
-**** perform migration of old files
+    There are *no* events created.
+*** perform migration of old files
 
-     It will first migrate any old files. If migration happens it will fire a
-     ~Migrating~ event.
+    It will first migrate any old files. If migration happens it will fire a
+    ~Migrating~ event.
 
-     #+BEGIN_SRC haskell
-      traceWith tracer $ Migrating ".epoch files to .chunk files"
-     #+END_SRC
+    #+BEGIN_SRC haskell
+     traceWith tracer $ Migrating ".epoch files to .chunk files"
+    #+END_SRC
 
-**** perform validation
+*** perform validation
 
-     It will lookup the latest chunk or create one. Depending on the
-     ~ValidationPolicy~ it will either validate the that latest chunk or all
-     chunks.
+    It will lookup the latest chunk or create one. Depending on the
+    ~ValidationPolicy~ it will either validate the that latest chunk or all
+    chunks.
 
-     For each chunk it validates it will:
-     + fire ~ValidatingChunk~
-     + if there are problems with the chunk it may fire ~MissingChunkFile~,
-       ~InvalidSecondaryIndex~, ~MissingSecondaryIndex~, ~InvalidChunkFile~,
-       ~InvalidPrimaryIndex~, ~MissingPrimaryIndex~ or ~RewritePrimaryIndex~
+    For each chunk it validates it will:
+    + fire ~ValidatingChunk~
+    + if there are problems with the chunk it may fire ~MissingChunkFile~,
+      ~InvalidSecondaryIndex~, ~MissingSecondaryIndex~, ~InvalidChunkFile~,
+      ~InvalidPrimaryIndex~, ~MissingPrimaryIndex~ or ~RewritePrimaryIndex~
 
-**** create cachedIndex for most recent chunk
+*** create cachedIndex for most recent chunk
 
-     Spawns a background thread to expire past chunks from the cache that
-     haven't been used for a while.
-     Will create ~TraceCacheEvent~ events when chunks expire using
-     ~cacheTracer~ that is created from ~immTracer~:
+    Spawns a background thread to expire past chunks from the cache that
+    haven't been used for a while.
+    Will create ~TraceCacheEvent~ events when chunks expire using
+    ~cacheTracer~ that is created from ~immTracer~:
 
-     #+BEGIN_SRC haskell
-    cacheTracer = contramap TraceCacheEvent tracer
-     #+END_SRC
+    #+BEGIN_SRC haskell
+   cacheTracer = contramap TraceCacheEvent tracer
+    #+END_SRC
 
-**** open state for the most recent chunk
+*** open state for the most recent chunk
 
-     There are *no* events created.
+    There are *no* events created.
 
-*** open VolatileDB
+** open VolatileDB
 
-    When VolatileDB opens it will:
-    + create a directory in the file system if one does not exist
-    + open state
+   When VolatileDB opens it will:
+   + create a directory in the file system if one does not exist
+   + open state
 
-    While executing, ~VolatileDB~ will use events described in [[*~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events][~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events]]
+   While executing, ~VolatileDB~ will use events described in [[*~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events][~TraceVolatileDBEvent~ - a.k.a ~VolatileDB~'s events]]
 
-    Below more details about each execution step:
+   Below more details about each execution step:
 
-**** create a directory
+*** create a directory
 
-     There are *no* events created.
+    There are *no* events created.
 
-**** open state
+*** open state
 
-     While opening the DB files it may fire events regarding errors like:
+    While opening the DB files it may fire events regarding errors like:
 
-     + invalid file names (~traceWith tracer $ InvalidFileNames invalid~)
-     + validating files (~traceWith tracer $ Truncate e file offset~)
+    + invalid file names (~traceWith tracer $ InvalidFileNames invalid~)
+    + validating files (~traceWith tracer $ Truncate e file offset~)
 
-     No other events are created
+    No other events are created
 
-*** open LgrDB
+** open LgrDB
 
-    When LgrDB opens it will:
-    + create a directory in the file system if one does not exist
-    + initialize ~LgrDB~ from disk
-    + prune ~LgrDB~
+   When LgrDB opens it will:
+   + create a directory in the file system if one does not exist
+   + initialize ~LgrDB~ from disk
+   + prune ~LgrDB~
 
-    While executing, ~LgrDB~ will use events described in  [[*~TraceLedgerEvent~ &
-    ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events][~TraceLedgerEvent~ &
-    ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events]]
+   While executing, ~LgrDB~ will use events described in  [[*~TraceLedgerEvent~ &
+   ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events][~TraceLedgerEvent~ &
+   ~TraceLedgerReplayEvent~ - a.k.a ~LedgerDB~'s events]]
 
-    Below more details about each execution step:
+   Below more details about each execution step:
 
-**** create a directory
+*** create a directory
 
-     There are *no* events created.
+    There are *no* events created.
 
-**** initialize ~LgrDB~ from disk
+*** initialize ~LgrDB~ from disk
 
-     First it needs to select a starting ledger state with which it will
-     initialize ~LgrDB~. In order to do that, list of all available snapshots is
-     retrieved from the disk. Two things may happen:
+    First it needs to select a starting ledger state with which it will
+    initialize ~LgrDB~. In order to do that, list of all available snapshots is
+    retrieved from the disk. Two things may happen:
 
-     + there are no valid snapshots available
-     + there is at least one valid snapshot available
+    + there are no valid snapshots available
+    + there is at least one valid snapshot available
 
-***** there are no valid snapshots available
+**** there are no valid snapshots available
 
-      If there are no valid snapshots available, it will:
-      + fire an event ~ReplayFromGenesis~
-      + create a ~LedgerDB~ anchored at Genesis
-      + start initialization with that ~LedgerDB~
+     If there are no valid snapshots available, it will:
+     + fire an event ~ReplayFromGenesis~
+     + create a ~LedgerDB~ anchored at Genesis
+     + start initialization with that ~LedgerDB~
 
-***** there is at least one valid snapshot available
+**** there is at least one valid snapshot available
 
-      If there is at least one valid snapshot available, it will:
+     If there is at least one valid snapshot available, it will:
 
-      + fire an event ~ReplayFromSnapshot~
-      + create a ~LedgerDB~ anchored at that snapshot
-      + start initialization with that ~LedgerDB~
+     + fire an event ~ReplayFromSnapshot~
+     + create a ~LedgerDB~ anchored at that snapshot
+     + start initialization with that ~LedgerDB~
 
-     Initialization builds a ~LedgerDB~ by folding over blocks returned by the
-     ~ImmutableDB~, starting from the block corresponding to the anchor of the
-     initial ~LedgerDB~ going up to the tip of the ~ImmutableDB~.
-     Each block is then validated, applied to existing ledger state, and extend
-     the current ~LedgerDB~ with a new state.
-     This process is called a replay.
+    Initialization builds a ~LedgerDB~ by folding over blocks returned by the
+    ~ImmutableDB~, starting from the block corresponding to the anchor of the
+    initial ~LedgerDB~ going up to the tip of the ~ImmutableDB~.
+    Each block is then validated, applied to existing ledger state, and extend
+    the current ~LedgerDB~ with a new state.
+    This process is called a replay.
 
-     For each block that we replay a ~ReplayedBlock~ is fired
+    For each block that we replay a ~ReplayedBlock~ is fired
 
-*** initialize chain selection
+** initialize chain selection
 
 
-    Perform the initial chain selection based on the tip of the ImmutableDB and
-    the contents of the VolatileDB.
-    While executing, it will fire events described in [[*~TraceInitChainSelEvent~ - a.k.a init chain selection's events][~TraceInitChainSelEvent~ - a.k.a init chain selection's events]]
+   Perform the initial chain selection based on the tip of the ImmutableDB and
+   the contents of the VolatileDB.
+   While executing, it will fire events described in [[*~TraceInitChainSelEvent~ - a.k.a init chain selection's events][~TraceInitChainSelEvent~ - a.k.a init chain selection's events]]
 
-    List of candidates is created based on blocks that live in the
-    ~VolatileDB~. If that is list empty, meaning that there are no candidates
-    available, an empty chain fragment (anchored at the ~ImmutableDB~ tip) is
-    returned. Otherwise a chain selection is initialized.
+   List of candidates is created based on blocks that live in the
+   ~VolatileDB~. If that is list empty, meaning that there are no candidates
+   available, an empty chain fragment (anchored at the ~ImmutableDB~ tip) is
+   returned. Otherwise a chain selection is initialized.
 
-    The chain selection algorithm will gather all chain candidates, sort them
-    (in order from best to worst) and then it will validated the first
-    candidate that is on the list. If candidate happens invalid it will move to
-    the next one, otherwise it will return it.
-    While the validation happens few (more then one during single validation)
-    events might be fired:
-    + ~ValidCandidate~ if the validation was successful
-    + ~InvalidBlock~
-    + ~CandidateContainsFutureBlocks~ - Candidate contains headers from the
-      future which do no exceed the clock skew.
-    + ~CandidateContainsFutureBlocksExceedingClockSkew~ - Candidate contains
-      headers from the future which exceed the clock skew, making them invalid.
+   The chain selection algorithm will gather all chain candidates, sort them
+   (in order from best to worst) and then it will validated the first
+   candidate that is on the list. If candidate happens invalid it will move to
+   the next one, otherwise it will return it.
+   While the validation happens few (more then one during single validation)
+   events might be fired:
+   + ~ValidCandidate~ if the validation was successful
+   + ~InvalidBlock~
+   + ~CandidateContainsFutureBlocks~ - Candidate contains headers from the
+     future which do no exceed the clock skew.
+   + ~CandidateContainsFutureBlocksExceedingClockSkew~ - Candidate contains
+     headers from the future which exceed the clock skew, making them invalid.
 
 * Node execution logs
 
