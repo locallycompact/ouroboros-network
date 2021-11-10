@@ -103,6 +103,7 @@ openDB
      + ~TraceVolatileDBEvent~
      + ~TraceLedgerEvent~
      + ~TraceLedgerReplayEvent~
+     + ~TraceInitChainSelEvent~
 
      Below we look at each event more closely.
 
@@ -320,6 +321,64 @@ data TraceOpenEvent blk =
      [LedgerEvent blk] replayTo~) where ~replayTo~ will be ~()~ but thanks to
      magic of ~ContravariantFunctor~ it will be mapped to provided tip.
 
+**** ~TraceInitChainSelEvent~ - a.k.a init chain selection's events
+
+     #+BEGIN_SRC haskell
+   | TraceInitChainSelEvent      (TraceInitChainSelEvent       blk)
+     #+END_SRC
+
+     Constructor ~TraceInitChainSelEvent~ wraps a ~TraceInitChainSelEvent blk~.
+     Those events are fired when we initialize chain selection.
+
+#+BEGIN_SRC haskell
+data TraceInitChainSelEvent blk
+  = InitChainSelValidation (TraceValidationEvent blk)
+    -- ^ An event traced during validation performed while performing initial
+    -- chain selection.
+  deriving (Generic)
+#+END_SRC
+
+     Tracer used to fire those events is built with a ~ContravariantFunctor~ so
+     that events that are fired are of type ~TraceValidationEvent~
+
+     #+BEGIN_SRC haskell
+trace = traceWith
+  (contramap (TraceInitChainSelEvent . InitChainSelValidation) tracer)
+
+data TraceValidationEvent blk =
+    -- | A point was found to be invalid.
+    InvalidBlock
+      (ExtValidationError blk)
+      (RealPoint blk)
+
+    -- | A candidate chain was invalid.
+  | InvalidCandidate
+      (AnchoredFragment (Header blk))
+
+    -- | A candidate chain was valid.
+  | ValidCandidate (AnchoredFragment (Header blk))
+
+    -- | Candidate contains headers from the future which do no exceed the
+    -- clock skew.
+  | CandidateContainsFutureBlocks
+      (AnchoredFragment (Header blk))
+      -- ^ Candidate chain containing headers from the future
+      [Header blk]
+      -- ^ Headers from the future, not exceeding clock skew
+
+    -- | Candidate contains headers from the future which exceed the
+    -- clock skew, making them invalid.
+  | CandidateContainsFutureBlocksExceedingClockSkew
+      (AnchoredFragment (Header blk))
+      -- ^ Candidate chain containing headers from the future
+      [Header blk]
+      -- ^ Headers from the future, exceeding clock skew
+  deriving (Generic)
+
+     #+END_SRC
+
+
+
 *** cdbTraceLedger
 
     The ~cdbTraceLedger~ is used only once in the module
@@ -374,7 +433,8 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
     When ImmutableDB opens it will:
     + create a directory in the file system if one does not exist
     + perform migration of old files
-    + perform validation as per the ~ValidationPolicy~, this returns most recent chunk
+    + perform validation as per the ~ValidationPolicy~, this returns most recent
+      chunk
     + create ~cachedIndex~ for the most recent chunk
     + open state for the most recent chunk
 
@@ -445,7 +505,6 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
 
      No other events are created
 
-
 *** open LgrDB
 
     When LgrDB opens it will:
@@ -496,9 +555,27 @@ chainSelectionForBlock cdb@CDB{..} blockCache hdr = do
 
      For each block that we replay a ~ReplayedBlock~ is fired
 
-*** TODO initialize chain selection
+*** initialize chain selection
 
 
-* Things not covered yet
-** TODO ~chainSelectionForBlock~ & ~TraceAddBlockEvent . AddBlockValidation~
-** TODO node time analysis, missing events
+    Perform the initial chain selection based on the tip of the ImmutableDB and
+    the contents of the VolatileDB.
+    While executing, it will fire events described in [[*~TraceInitChainSelEvent~ - a.k.a init chain selection's events][~TraceInitChainSelEvent~ - a.k.a init chain selection's events]]
+
+    List of candidates is created based on blocks that live in the
+    ~VolatileDB~. If that is list empty, meaning that there are no candidates
+    available, an empty chain fragment (anchored at the ~ImmutableDB~ tip) is
+    returned. Otherwise a chain selection is initialized.
+
+    The chain selection algorithm will gather all chain candidates, sort them
+    (in order from best to worst) and then it will validated the first
+    candidate that is on the list. If candidate happens invalid it will move to
+    the next one, otherwise it will return it.
+    While the validation happens few (more then one during single validation)
+    events might be fired:
+    + ~ValidCandidate~ if the validation was successful
+    + ~InvalidBlock~
+    + ~CandidateContainsFutureBlocks~ - Candidate contains headers from the
+      future which do no exceed the clock skew.
+    + ~CandidateContainsFutureBlocksExceedingClockSkew~ - Candidate contains
+      headers from the future which exceed the clock skew, making them invalid.
