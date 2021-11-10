@@ -61,7 +61,6 @@ import           Data.Typeable (Typeable)
 import           System.FilePath ((</>))
 import           System.Random (StdGen, newStdGen, randomIO, randomRIO)
 
-import           Control.Monad.Class.MonadTime (MonadTime)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
 import           Ouroboros.Network.BlockFetch (BlockFetchConfiguration (..))
@@ -245,7 +244,7 @@ run args stdArgs = stdLowLevelRunNodeArgsIO args stdArgs >>= runWith args
 -- This function runs forever unless an exception is thrown.
 runWith :: forall m addrNTN addrNTC versionDataNTN versionDataNTC blk.
      ( RunNode blk
-     , IOLike m, MonadTime m, MonadTimer m
+     , IOLike m, MonadTimer m
      , Hashable addrNTN, Ord addrNTN, Typeable addrNTN
      )
   => RunNodeArgs m addrNTN addrNTC blk

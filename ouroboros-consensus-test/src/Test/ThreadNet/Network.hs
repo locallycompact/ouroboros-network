@@ -37,7 +37,6 @@ import           Codec.CBOR.Read (DeserialiseFailure)
 import qualified Control.Exception as Exn
 import           Control.Monad
 import qualified Control.Monad.Class.MonadSTM as MonadSTM
-import           Control.Monad.Class.MonadTime (MonadTime)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 import qualified Control.Monad.Except as Exc
 import           Control.Tracer
@@ -277,7 +276,6 @@ type EdgeStatusVar m = StrictTVar m EdgeStatus
 -- each node.
 runThreadNetwork :: forall m blk.
                     ( IOLike m
-                    , MonadTime m
                     , MonadTimer m
                     , RunNode blk
                     , TxGen blk

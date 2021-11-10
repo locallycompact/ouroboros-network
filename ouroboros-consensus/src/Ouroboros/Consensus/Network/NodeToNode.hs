@@ -41,7 +41,6 @@ import           Codec.CBOR.Decoding (Decoder)
 import           Codec.CBOR.Encoding (Encoding)
 import           Codec.CBOR.Read (DeserialiseFailure)
 import           Control.Monad (forever)
-import           Control.Monad.Class.MonadTime (MonadTime)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 import           Control.Tracer
 import           Data.ByteString.Lazy (ByteString)
@@ -170,7 +169,6 @@ data Handlers m peer blk = Handlers {
 mkHandlers
   :: forall m blk remotePeer localPeer.
      ( IOLike m
-     , MonadTime m
      , MonadTimer m
      , LedgerSupportsMempool blk
      , HasTxId (GenTx blk)

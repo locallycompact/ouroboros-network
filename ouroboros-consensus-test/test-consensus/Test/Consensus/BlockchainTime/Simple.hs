@@ -287,7 +287,7 @@ prop_delayNoClockShift =
                    5
       assertEqual "slots" slots [SlotNo n | n <- [0..4]]
 
-testOverrideDelay :: forall m. (IOLike m, MonadTime m, MonadDelay (OverrideDelay m))
+testOverrideDelay :: forall m. (IOLike m, MonadDelay (OverrideDelay m))
                   => SystemStart
                   -> SlotLength
                   -> NominalDiffTime

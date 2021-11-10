@@ -22,6 +22,7 @@ module Ouroboros.Consensus.Storage.ChainDB.Impl.ChainSel (
   ) where
 
 import           Control.Exception (assert)
+import           Control.Monad.Class.MonadTime (getCurrentTime)
 import           Control.Monad.Except
 import           Control.Monad.Trans.State.Strict
 import           Control.Tracer (Tracer, contramap, traceWith)
@@ -311,12 +312,14 @@ addBlockSync cdb@CDB {..} blkToAdd = do
             $ History.runQuery
                 (fst <$> History.slotToWallclock (blockSlot b))
                 hfSummary
+    now <- (,) <$> getMonotonicTime <*> getCurrentTime
     trace $
       DoneAddingBlock
         (blockRealPoint b)
         (Ignorable b)
         whenItWasForged
         whenItWasEnqueued
+        now
         newTip
 
     deliverProcessed newTip

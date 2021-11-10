@@ -631,13 +631,15 @@ data TraceAddBlockEvent blk =
   | ChainSelectionForFutureBlock (RealPoint blk)
 
     -- | The ChainDB has finished processing an instruction to add this block.
-    -- The first time argument is when the block's labelled slot started
-    -- (expressed both as a relative and absolute time; the 'Left' case carries
-    -- the payload of a
-    -- 'Ouroboros.Consensus.HardFork.History.Qry.PastHorizonException'), and the
+    -- The first point argument identifies the block. The first time argument is
+    -- when the block's labelled slot started (expressed both as a relative and
+    -- absolute time; the 'Left' case carries the payload of a
+    -- 'Ouroboros.Consensus.HardFork.History.Qry.PastHorizonException'). The
     -- second time argument is when the instruction was added to the
-    -- 'cdbBlocksToAdd' queue. The second point argument is the possibly-new
-    -- ChainDB tip that resulted from this block having been added.
+    -- 'cdbBlocksToAdd' queue (ie when we downloaded the block). The third time
+    -- is when chain selection finished processing this block (ie when this
+    -- event was emitted). The second point argument is the possibly-new ChainDB
+    -- tip that resulted from this block having been added.
     --
     -- If the block was relevant, valid, new, and so on, then this instruction
     -- incurred a corresponding chain selection that finished immediately prior
@@ -650,11 +652,12 @@ data TraceAddBlockEvent blk =
     -- instruction. There may be zero (eg invalid block), one (eg usual case),
     -- or many (eg future block) chain selections per instruction.
   | DoneAddingBlock
-      (RealPoint blk)
+      (RealPoint blk)   -- first point
       (Ignorable "block" blk)
-      (Either [History.EraSummary] (RelativeTime, UTCTime))
-      Time
-      (Point blk)
+      (Either [History.EraSummary] (RelativeTime, UTCTime))  -- first time
+      Time  -- second time
+      (Time, UTCTime)  -- third time
+      (Point blk)   -- second point
 
   deriving (Generic)
 

@@ -51,7 +51,7 @@ import           Control.Monad.Class.MonadEventlog
 import           Control.Monad.Class.MonadFork
 import           Control.Monad.Class.MonadST
 import           Control.Monad.Class.MonadThrow
-import           Control.Monad.Class.MonadTime hiding (MonadTime (..))
+import           Control.Monad.Class.MonadTime
 import           Control.Monad.Class.MonadTimer
 
 import           Ouroboros.Consensus.Util.MonadSTM.NormalForm
@@ -73,6 +73,7 @@ class ( MonadAsync              m
       , MonadMonotonicTime      m
       , MonadEvaluate           m
       , MonadThrow         (STM m)
+      , MonadTime               m
       , forall a. NoThunks (m a)
       , forall a. NoThunks a => NoThunks (StrictTVar m a)
       , forall a. NoThunks a => NoThunks (StrictMVar m a)

@@ -34,11 +34,12 @@ import           Control.Monad.Class.MonadFork
 import           Control.Monad.Class.MonadST
 import           Control.Monad.Class.MonadSTM
 import           Control.Monad.Class.MonadThrow
+import           Control.Monad.Class.MonadTime
 import           Control.Monad.Class.MonadTimer
 
 import           Ouroboros.Consensus.Util ((.:))
-import           Ouroboros.Consensus.Util.IOLike (IOLike (..),
-                     MonadMonotonicTime (..), StrictMVar, StrictTVar)
+import           Ouroboros.Consensus.Util.IOLike (IOLike (..), StrictMVar,
+                     StrictTVar)
 
 {-------------------------------------------------------------------------------
   Basic definitions
@@ -129,6 +130,9 @@ instance MonadSTM m => MonadSTM (WithEarlyExit m) where
 
 instance MonadCatch m => MonadThrow (WithEarlyExit m) where
   throwIO = lift . throwIO
+
+instance MonadTime m => MonadTime (WithEarlyExit m) where
+  getCurrentTime = lift getCurrentTime
 
 instance MonadCatch m => MonadCatch (WithEarlyExit m) where
   catch act handler = earlyExit $
