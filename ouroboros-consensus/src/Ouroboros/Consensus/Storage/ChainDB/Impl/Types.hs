@@ -48,6 +48,7 @@ module Ouroboros.Consensus.Storage.ChainDB.Impl.Types (
   , getBlockToAdd
   , newBlocksToAdd
     -- * Trace types
+  , Ignorable (..)
   , NewTipInfo (..)
   , TraceAddBlockEvent (..)
   , TraceCopyToImmutableDBEvent (..)
@@ -58,7 +59,6 @@ module Ouroboros.Consensus.Storage.ChainDB.Impl.Types (
   , TraceIteratorEvent (..)
   , TraceOpenEvent (..)
   , TraceValidationEvent (..)
-  , Ignorable (..)
   ) where
 
 import           Control.Tracer
