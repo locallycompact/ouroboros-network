@@ -44,7 +44,6 @@ module Ouroboros.Consensus.Util.ResourceRegistry (
   , modifyWithTempRegistry
   , runInnerWithTempRegistry
   , runWithTempRegistry
-  , runnableInnerWithTempRegistry
     -- ** opaque
   , WithTempRegistry
     -- * Combinators primarily for testing
@@ -781,7 +780,7 @@ runWithTempRegistry m = withRegistry $ \rr -> do
 -- As the resource might require some implementation details to be closed, the
 -- function to close it will also be provided by the inner computation.
 --
--- ASSUMPTION: closing @res@ closes every resource contained in @inner_st@
+-- ASSUMPTION: closing @res@ closes every resource contained in @innerSt@
 --
 -- NOTE: In the current implementation, there will be a brief moment where the
 -- inner registry still contains the inner computation's resources and also the
@@ -790,17 +789,19 @@ runWithTempRegistry m = withRegistry $ \rr -> do
 -- the composite resource will be later closed. This means there's a risk of
 -- /double freeing/, which can be harmless if anticipated.
 runInnerWithTempRegistry
-  :: forall inner_st st m res a. IOLike m
-  => WithTempRegistry inner_st m (a, inner_st, res, res -> m Bool)
+  :: forall innerSt st m res a. IOLike m
+  => WithTempRegistry innerSt m (a, innerSt, res)
      -- ^ The embedded computation; see ASSUMPTION above
+  -> (res -> m Bool)
+     -- ^ How to free; same as for 'allocateTemp'
   -> (st -> res -> Bool)
      -- ^ How to check; same as for 'allocateTemp'
   -> WithTempRegistry st m a
-runInnerWithTempRegistry inner isTransferred = do
+runInnerWithTempRegistry inner free isTransferred = do
     outerTR <- WithTempRegistry ask
 
     lift $ runWithTempRegistry $ do
-      (a, inner_st, res, free) <- inner
+      (a, innerSt, res) <- inner
 
       -- allocate in the outer layer
       _ <-   withFixedTempRegistry outerTR
@@ -813,21 +814,10 @@ runInnerWithTempRegistry inner isTransferred = do
       -- 'runWithTempRegistry' that lets us perform some action with async
       -- exceptions masked "at the same time" it closes its registry.
 
-      pure (a, inner_st)
+      pure (a, innerSt)
   where
     withFixedTempRegistry env (WithTempRegistry (ReaderT f)) =
       WithTempRegistry $ ReaderT $ \_ -> f env
-
--- | Convenience function.
---
--- When a @WithTempRegistry@ computation has the shape expected by
--- @runInnerWithTempRegistry@, but instead it is run directly, some of the
--- returned values have to be omitted.
-runnableInnerWithTempRegistry
-  :: Monad m
-  => WithTempRegistry st m (a, st, st, st -> m Bool)
-  -> WithTempRegistry st m (a, st)
-runnableInnerWithTempRegistry = (>>= \(a,b,_,_) -> return (a,b))
 
 -- | When 'runWithTempRegistry' exits successfully while there are still
 -- resources remaining in the temporary registry that haven't been transferred
