@@ -784,10 +784,10 @@ runWithTempRegistry m = withRegistry $ \rr -> do
 --
 -- NOTE: In the current implementation, there will be a brief moment where the
 -- inner registry still contains the inner computation's resources and also the
--- outer registry simultaneously contains the new composite resource. If an async
--- is received at that time, then the inner resources will be closed and then
--- the composite resource will be later closed. This means there's a risk of
--- /double freeing/, which can be harmless if anticipated.
+-- outer registry simultaneously contains the new composite resource. If an
+-- async exception is received at that time, then the inner resources will be
+-- closed and then the composite resource will be closed. This means there's a
+-- risk of /double freeing/, which can be harmless if anticipated.
 runInnerWithTempRegistry
   :: forall innerSt st m res a. IOLike m
   => WithTempRegistry innerSt m (a, innerSt, res)
@@ -803,12 +803,12 @@ runInnerWithTempRegistry inner free isTransferred = do
     lift $ runWithTempRegistry $ do
       (a, innerSt, res) <- inner
 
-      -- allocate in the outer layer
+      -- Allocate in the outer layer.
       _ <-   withFixedTempRegistry outerTR
            $ allocateTemp (return res) free isTransferred
 
       -- TODO This point here is where an async exception could cause both the
-      -- inner resources to be closed and the outer resource to be closed later
+      -- inner resources to be closed and the outer resource to be closed later.
       --
       -- If we want to do better than that, we'll need a variant of
       -- 'runWithTempRegistry' that lets us perform some action with async
@@ -816,6 +816,10 @@ runInnerWithTempRegistry inner free isTransferred = do
 
       pure (a, innerSt)
   where
+    withFixedTempRegistry
+        :: TempRegistry     st      m
+        -> WithTempRegistry st      m res
+        -> WithTempRegistry innerSt m res
     withFixedTempRegistry env (WithTempRegistry (ReaderT f)) =
       WithTempRegistry $ ReaderT $ \_ -> f env
 
