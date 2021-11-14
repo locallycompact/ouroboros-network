@@ -55,6 +55,8 @@ import           Data.Maybe (fromMaybe, fromJust, isJust)
 import           Data.Monoid (Sum (..))
 import           Data.Typeable (Typeable)
 import           Data.Void (Void)
+import           Foreign.C.Error
+import qualified GHC.IO.Exception as IO
 
 import           Text.Printf
 
@@ -135,6 +137,8 @@ tests =
                  prop_connection_manager_valid_transition_order
   , testProperty "inbound_governor_valid_transition_order"
                  prop_inbound_governor_valid_transition_order
+  , testProperty "unit_server_accept_error"
+                 unit_server_accept_error
   , testProperty "unit_connection_terminated_when_negotiating"
                  unit_connection_terminated_when_negotiating
   , testGroup "generators"
@@ -1367,7 +1371,8 @@ instance Arbitrary req =>
 
 -- | The concrete address type used by simulations.
 --
-type SimAddr = Snocket.TestAddress Int
+type SimAddr  = Snocket.TestAddress SimAddr_
+type SimAddr_ = Int
 
 -- | We use a wrapper for test addresses since the Arbitrary instance for Snocket.TestAddress only
 --   generates addresses between 1 and 4.
@@ -2465,6 +2470,77 @@ prop_never_above_hardlimit serverAcc
     sim :: IOSim s ()
     sim = multiNodeSim serverAcc Duplex (singletonScript noAttenuation)
                        acceptedConnLimit l
+
+-- | Checks that the server re-throws 'ECONNABORTED' 'IOError'
+-- thrown by 'accept'.
+--
+unit_server_accept_error :: Property
+unit_server_accept_error =
+    runSimOrThrow sim
+  where
+    -- The following attenuation make sure that the `accept` call will throw.
+    --
+    bearerAttenuation :: BearerInfo
+    bearerAttenuation = noAttenuation { biAcceptFailures = Just 0 }
+
+    sim :: IOSim s Property
+    sim = handle (\e -> return $ case fromException e of
+                          Just (ExceptionInLinkedThread _ err) ->
+                            case fromException err of
+                              Just (_ :: IOError) -> property True
+                              Nothing             -> property False
+                          Nothing                 -> property False
+                 )
+        $ withSnocket nullTracer
+                      (singletonScript bearerAttenuation )
+        $ \snock ->
+           bracket ((,) <$> Snocket.open snock Snocket.TestFamily
+                        <*> Snocket.open snock Snocket.TestFamily)
+                   (\ (socket0, socket1) -> Snocket.close snock socket0 >>
+                                            Snocket.close snock socket1)
+             $ \ (socket0, socket1) -> do
+
+               let addr :: SimAddr
+                   addr = Snocket.TestAddress (0 :: Int)
+                   pdata :: ClientAndServerData Int
+                   pdata = ClientAndServerData 0 [] [] []
+               Snocket.bind snock socket0 addr
+               Snocket.listen snock socket0
+               nextRequests <- oneshotNextRequests pdata
+               withBidirectionalConnectionManager "node-0" simTimeouts
+                                                  nullTracer nullTracer
+                                                  nullTracer nullTracer
+                                                  snock socket0
+                                                  (Just addr)
+                                                  [accumulatorInit pdata]
+                                                  nextRequests
+                                                  noTimeLimitsHandshake
+                                                  maxAcceptedConnectionsLimit
+                 (\_connectionManager _serverAddr serverAsync -> do
+                   -- connect to the server
+                   Snocket.connect snock socket1 addr
+                   -- verify that server's `accept` error is rethrown by the
+                   -- server
+                   r <- atomically $
+                     (Just <$> waitCatchSTM serverAsync)
+                     `orElse`
+                     return Nothing
+                   return $ case r of
+                     Nothing        -> counterexample "server did not throw" False
+                     Just (Right _) -> counterexample "unexpected value" False
+                     Just (Left e)  |  Just (err :: IOError) <- fromException e
+                                    ,  Just errno <- IO.ioe_errno err
+                                    -- TODO: use isECONNABORTED function
+                                    ,  case eCONNABORTED of
+                                         Errno errno' -> errno == errno'
+                                    -> property True
+                                    |  otherwise
+                                    -> counterexample ("unexpected error: " ++ show e)
+                                                      False
+                 )
+
+
+
 
 multiNodeSim :: (Serialise req, Show req, Eq req, Typeable req)
              => req
