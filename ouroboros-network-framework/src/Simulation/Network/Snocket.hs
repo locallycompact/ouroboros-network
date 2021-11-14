@@ -61,6 +61,7 @@ import qualified Data.Map.Strict as Map
 import           Data.Typeable (Typeable)
 import           Numeric.Natural (Natural)
 import           Text.Printf (printf)
+import           Foreign.C.Error
 
 import           Data.Wedge
 import           Data.Monoid.Synchronisation (FirstToFinish (..))
@@ -250,6 +251,13 @@ data BearerInfo = BearerInfo
       -- | Maximum number of successful writes for an outbound bearer.
     , biOutboundWriteFailure :: !(Maybe Int)
 
+      -- | Time after which  accept will throw an exception.
+      --
+      -- TODO: we should give some control over which exception is thrown.
+      -- Currently we only throw 'eCONNABORTED' exception.
+      --
+    , biAcceptFailures       :: !(Maybe DiffTime)
+
       -- | SDU size of the bearer; it will be shared between outbound and inbound
       -- sides.
       --
@@ -282,6 +290,7 @@ noAttenuation = BearerInfo { biConnectionDelay      = 0
                            , biOutboundAttenuation  = \_ _ -> (0, Success)
                            , biInboundWriteFailure  = Nothing
                            , biOutboundWriteFailure = Nothing
+                           , biAcceptFailures       = Nothing
                            , biSDUSize              = SDUSize 12228
                            }
 
@@ -971,7 +980,9 @@ mkSnocket state tr = Snocket { getLocalAddr
     accept :: FD m (TestAddress addr)
            -> m (Accept m (FD m (TestAddress addr))
                                 (TestAddress addr))
-    accept FD { fdVar } = pure accept_
+    accept FD { fdVar } = do time <- getMonotonicTime
+                             delta <- biAcceptFailures <$> atomically (stepScriptSTM $ nsBearerInfo state)
+                             return $ accept_ time delta
       where
         -- non-blocking; return 'True' if a connection is in 'SYN_SENT' state
         synSent :: TestAddress addr
@@ -991,10 +1002,19 @@ mkSnocket state tr = Snocket { getLocalAddr
              _                                           ->
                return False
 
-        accept_ = Accept $ do
+        accept_ :: Time
+                -> Maybe DiffTime
+                -> Accept m (FD m (TestAddress addr))
+                                  (TestAddress addr)
+        accept_ time delta = Accept $ do
+            ctime <- getMonotonicTime
             bracketOnError
               (atomically $ do
                 fd <- readTVar fdVar
+                when (case delta of
+                        Nothing -> False
+                        Just d  -> ctime <= d `addTime` time)
+                  (throwSTM connectionAbortedError)
                 case fd of
                   FDUninitialised mbAddr ->
                     -- 'berkeleyAccept' used by 'socketSnocket' will return
@@ -1055,7 +1075,7 @@ mkSnocket state tr = Snocket { getLocalAddr
                   Left (err, mbLocalAddr, fdType) -> do
                     traceWith tr (WithAddr (mbLocalAddr) Nothing
                                            (STAcceptFailure fdType err))
-                    return (AcceptFailure err, accept_)
+                    return (AcceptFailure err, accept_ time delta)
 
                   Right (chann, connId@ConnectionId { remoteAddress }) -> do
                     let ChannelWithInfo
@@ -1083,7 +1103,7 @@ mkSnocket state tr = Snocket { getLocalAddr
                     traceWith tr (WithAddr (Just (localAddress connId)) Nothing
                                            (STAccepted remoteAddress))
 
-                    return (Accepted fdRemote remoteAddress, accept_)
+                    return (Accepted fdRemote remoteAddress, accept_ time delta)
 
 
         invalidError :: FD_ m (TestAddress addr) -> IOError
@@ -1093,6 +1113,18 @@ mkSnocket state tr = Snocket { getLocalAddr
           , ioe_location    = "Ouroboros.Network.Snocket.Sim.accept"
           , ioe_description = printf "Invalid argument (%s)" (show fd)
           , ioe_errno       = Nothing
+          , ioe_filename    = Nothing
+          }
+
+        connectionAbortedError :: IOError
+        connectionAbortedError = IOError
+          { ioe_handle      = Nothing
+          , ioe_type        = OtherError
+          , ioe_location    = "Ouroboros.Network.Snocket.Sim.accept"
+            -- Note: this matches the `iseCONNABORTED` on Windows, see
+            -- 'Ouroboros.Network.Server2`
+          , ioe_description = "Software caused connection abort (WSAECONNABORTED)"
+          , ioe_errno       = Just (case eCONNABORTED of Errno errno -> errno)
           , ioe_filename    = Nothing
           }
 
