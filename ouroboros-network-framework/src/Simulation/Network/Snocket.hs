@@ -23,12 +23,14 @@ module Simulation.Network.Snocket
   (
   -- * Simulated Snocket
     withSnocket
+  , UniverseState (..)
   , ResourceException (..)
   , SnocketTrace (..)
   , TimeoutDetail (..)
   , SockType (..)
   , OpenType (..)
 
+  , NormalisedId (..)
   , BearerInfo (..)
   , SuccessOrFailure (..)
   , Size
@@ -204,6 +206,15 @@ data NetworkState m addr = NetworkState {
 
     }
 
+-- | Simulation accessible network environment consumed by 'simSnocket'.
+--
+newtype UniverseState addr = UniverseState {
+      -- | Registry of active connections and respective provider
+      --
+      usConnections       :: Map (NormalisedId addr) addr
+    }
+    deriving Show
+
 
 -- | Each bearer info describes outbound and inbound side of a point to
 -- point bearer.
@@ -350,11 +361,12 @@ withSnocket
                           (SnocketTrace m (TestAddress peerAddr)))
     -> Script BearerInfo
     -> (Snocket m (FD m (TestAddress peerAddr)) (TestAddress peerAddr)
+        -> m (UniverseState (TestAddress peerAddr))
         -> m a)
     -> m a
 withSnocket tr script k = do
     st <- newNetworkState script
-    a <- k (mkSnocket st tr)
+    a <- k (mkSnocket st tr) (toUniverse st)
          `catch`
          \e -> do re <- checkResources st (Just e)
                   traverse_ throwIO re
@@ -381,6 +393,11 @@ withSnocket tr script k = do
          |  otherwise
          -> return   Nothing
 
+    toUniverse :: NetworkState m (TestAddress peerAddr)
+               -> m (UniverseState (TestAddress peerAddr))
+    toUniverse ns = atomically $ do
+        usConnections <- fmap connProvider <$> readTVar (nsConnections ns)
+        return (UniverseState usConnections)
 
 
 

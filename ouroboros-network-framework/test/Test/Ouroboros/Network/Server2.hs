@@ -834,7 +834,7 @@ prop_unidirectional_Sim :: NonFailingBearerInfoScript
 prop_unidirectional_Sim (NonFailingBearerInfoScript script) clientAndServerData =
   simulatedPropertyWithTimeout 7200 $
     withSnocket nullTracer
-                (toBearerInfo <$> script) $ \snock ->
+                (toBearerInfo <$> script) $ \snock _ ->
       bracket (Snocket.open snock Snocket.TestFamily)
               (Snocket.close snock) $ \fd -> do
         Snocket.bind   snock fd serverAddr
@@ -992,7 +992,7 @@ prop_bidirectional_Sim (NonFailingBearerInfoScript script) data0 data1 =
   simulatedPropertyWithTimeout 7200 $
     withSnocket sayTracer
                 (toBearerInfo <$> script)
-                $ \snock ->
+                $ \snock _ ->
       bracket ((,) <$> Snocket.open snock Snocket.TestFamily
                    <*> Snocket.open snock Snocket.TestFamily)
               (\ (socket0, socket1) -> Snocket.close snock socket0 >>
@@ -2483,7 +2483,7 @@ multiNodeSim serverAcc dataFlow script acceptedConnLimit l = do
       mb <- timeout 7200
                     ( withSnocket nullTracer
                                   script
-              $ \snocket ->
+              $ \snocket _ ->
                  multinodeExperiment (Tracer traceM)
                                      (Tracer traceM)
                                      (Tracer traceM)
