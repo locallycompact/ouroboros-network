@@ -48,7 +48,8 @@ import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, newTVarIO, readT
 import qualified Control.Monad.Class.MonadSTM as LazySTM
 import           Control.Monad.Class.MonadTime (Time)
 
-import           Test.Ouroboros.Network.PeerSelection.Script
+import           Ouroboros.Network.Testing.Data.Script
+                  (Script(Script), stepScript, initScript, NonEmpty ((:|)))
 import           Test.Ouroboros.Network.PeerSelection.Instances()
 import           Test.QuickCheck
 import           Test.Tasty (TestTree, testGroup)
@@ -132,7 +133,7 @@ genMockRoots = sized $ \relaysNumber -> do
 instance Arbitrary MockRoots where
     arbitrary = genMockRoots
     shrink roots@MockRoots { mockLocalRootPeers, mockDNSMap } =
-      [ roots { mockLocalRootPeers = peers} 
+      [ roots { mockLocalRootPeers = peers}
       | peers <- shrinkList (const []) mockLocalRootPeers
       ]
       ++
