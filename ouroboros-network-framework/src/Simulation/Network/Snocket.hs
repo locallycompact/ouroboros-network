@@ -17,6 +17,8 @@
 -- library, since it is needed in `ouroboros-network-framework:test` and
 -- `ouroboros-network:test' components.
 --
+-- TODO: Create a 'snocket' package, in order to avoid having to have
+-- ouroboros-network-testing as a dependency for this cabal library.
 module Simulation.Network.Snocket
   (
   -- * Simulated Snocket
@@ -32,8 +34,6 @@ module Simulation.Network.Snocket
   , Size
   , noAttenuation
   , FD
-  , Script (..)
-  , singletonScript
   , SDUSize
 
   , GlobalAddressScheme (..)
@@ -55,7 +55,6 @@ import           GHC.IO.Exception
 import           Data.Bifoldable (bitraverse_)
 import           Data.Foldable (traverse_)
 import           Data.Functor (($>))
-import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import           Data.Typeable (Typeable)
@@ -73,27 +72,8 @@ import           Ouroboros.Network.ConnectionId
 import           Ouroboros.Network.ConnectionManager.Types (AddressType (..))
 import           Ouroboros.Network.Snocket
 
-
-newtype Script a = Script (NonEmpty a)
-  deriving stock (Eq, Show, Functor, Foldable, Traversable)
-
-singletonScript :: a -> Script a
-singletonScript x = (Script (x :| []))
-
-initScriptSTM :: MonadSTMTx stm
-              => Script a
-              -> stm (TVar_ stm (Script a))
-initScriptSTM = LazySTM.newTVar
-
-stepScriptSTM :: MonadSTMTx stm
-              => TVar_ stm (Script a) -> stm a
-stepScriptSTM scriptVar = do
-    Script (x :| xs) <- LazySTM.readTVar scriptVar
-    case xs of
-      []     -> return ()
-      x':xs' -> LazySTM.writeTVar scriptVar (Script (x' :| xs'))
-    return x
-
+import           Ouroboros.Network.Testing.Data.Script
+                  (Script(..), initScriptSTM, stepScriptPureSTM)
 
 data Connection m addr = Connection
     { -- | Attenuated channels of a connection.
@@ -696,7 +676,7 @@ mkSnocket state tr = Snocket { getLocalAddr
           -- accepted.
           FDUninitialised mbLocalAddr -> mask $ \unmask -> do
             (connId, bearerInfo, simOpen) <- atomically $ do
-              bearerInfo <- stepScriptSTM (nsBearerInfo state)
+              bearerInfo <- stepScriptPureSTM (nsBearerInfo state)
               localAddress <-
                 case mbLocalAddr of
                   Just addr -> return addr
