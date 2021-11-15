@@ -33,7 +33,6 @@ class (HasAnnTip blk, GetPrevHash blk) => HasAnalysis blk where
 
   -- | Emit trace markers at points in processing.
   emitTraces     :: WithLedgerState blk -> [String]
-  emitTraces _ = []
 
 class HasProtocolInfo blk where
   data Args blk

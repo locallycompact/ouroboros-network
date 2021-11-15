@@ -64,6 +64,8 @@ analyseBlock f =
     p :: Proxy HasAnalysis
     p = Proxy
 
+-- | Lift a function polymorphic over all block types supporting `HasAnalysis`
+-- into a corresponding function over `CardanoBlock.`
 analyseWithLedgerState ::
   forall a.
   (forall blk. HasAnalysis blk => WithLedgerState blk -> a) ->
