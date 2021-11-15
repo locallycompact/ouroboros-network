@@ -28,7 +28,6 @@ module Test.Ouroboros.Network.Diffusion.Node
   , UseLedgerAfter (..)
   ) where
 
-import           Control.Applicative (Alternative)
 import           Control.Monad.Class.MonadAsync
 import           Control.Monad.Class.MonadFork
 import           Control.Monad.Class.MonadST
@@ -127,8 +126,7 @@ data Arguments m = Arguments
 type ResolverException = SomeException
 
 run :: forall s resolver m.
-       ( Alternative      m
-       , MonadAsync       m
+       ( MonadAsync       m
        , MonadEvaluate    m
        , MonadFork        m
        , MonadLabelledSTM m
