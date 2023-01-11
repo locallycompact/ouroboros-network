@@ -85,7 +85,7 @@ blockRealPoint blk = RealPoint s h
   where
     HeaderFields { headerFieldSlot = s, headerFieldHash = h } = getHeaderFields blk
 
-headerRealPoint :: HasHeader (Header blk) => Header blk -> RealPoint blk
+headerRealPoint :: HasHeader (Header blk) => HasHeader blk => Header blk -> RealPoint blk
 headerRealPoint hdr = RealPoint s h
   where
     HeaderFields { headerFieldSlot = s, headerFieldHash = h } = getHeaderFields hdr
