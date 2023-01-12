@@ -139,8 +139,10 @@ decodeAsFlatTerm bs0 =
               -- always starts by requesting initial input. Only decoders that
               -- fail or return a value without looking at their input can give
               -- a different initial result.
-              CBOR.R.Partial k <- CBOR.R.deserialiseIncremental CBOR.F.decodeTermToken
-              k (Just bs)
+              k <- CBOR.R.deserialiseIncremental CBOR.F.decodeTermToken
+              case k of
+                CBOR.R.Partial k -> k (Just bs)
+                _ -> error "impossible"
           collectOutput next
 
     collectOutput ::
